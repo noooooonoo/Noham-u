@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Votez pour Noham — Campagne Délégué de Classe</title>
+  <meta name="description" content="Site de campagne simple et professionnel pour devenir délégué de classe. Contient programme, réalisations, formulaire de contact et pétition signable." />
+  <style>
+    :root{--bg:#f6f8fb;--card:#ffffff;--accent:#2b7cff;--muted:#556;--radius:14px}
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;color:var(--muted);background:linear-gradient(180deg,#eef3fb, #f6f8fb)}
+    .container{max-width:980px;margin:28px auto;padding:20px}
+    header{display:flex;gap:20px;align-items:center}
+    .photo{width:120px;height:120px;border-radius:12px;background:linear-gradient(135deg,#cfe0ff,#fff);display:flex;align-items:center;justify-content:center;font-weight:700;color:#224;border:2px solid rgba(43,124,255,0.12)}
+    h1{margin:0;font-size:24px;color:#123}
+    p.lead{margin:6px 0 0;color:#3b4b63}
+    .grid{display:grid;grid-template-columns:1fr 340px;gap:18px;margin-top:20px}
+    .card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:0 8px 20px rgba(30,40,80,0.06)}
+
+    /* programme */
+    .promise{display:flex;gap:12px;margin-bottom:12px}
+    .promise .dot{width:44px;height:44px;border-radius:10px;background:#f0f6ff;border:1px solid rgba(43,124,255,0.08);display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--accent)}
+    .promise h4{margin:0;font-size:15px}
+    .promise p{margin:4px 0 0;color:#556}
+
+    /* bouton */
+    .btn{display:inline-block;padding:10px 14px;border-radius:10px;background:var(--accent);color:white;text-decoration:none;font-weight:600;cursor:pointer;border:none}
+    .btn.secondary{background:transparent;color:var(--accent);border:2px solid rgba(43,124,255,0.12)}
+
+    /* sidebar */
+    .small{font-size:13px;color:#445}
+    .stats{display:flex;gap:10px;margin-top:12px}
+    .stat{flex:1;background:#fbfcff;padding:8px;border-radius:10px;text-align:center}
+    .sign-list{max-height:220px;overflow:auto;margin-top:12px;padding:6px;border-radius:8px;background:#fbfdff}
+    .sign-item{padding:6px;border-bottom:1px solid rgba(30,40,80,0.03);font-size:14px}
+
+    /* manifesto */
+    .about ul{padding-left:18px}
+
+    footer{margin-top:18px;text-align:center;color:#889}
+
+    /* responsive */
+    @media (max-width:900px){.grid{grid-template-columns:1fr;}.photo{width:88px;height:88px}.container{padding:14px}}
+
+    /* print */
+    @media print{body{background:white}header .photo, .btn{display:none}.card{box-shadow:none;border:none}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="photo" id="photo">N
+      </div>
+      <div>
+        <h1 id="candidateName">Noham — Candidat Délégué</h1>
+        <p class="lead" id="slogan">Organisé • À l'écoute • Responsable</p>
+        <div style="margin-top:8px">
+          <button class="btn" id="voteBtn">Je signe la pétition</button>
+          <button class="btn secondary" id="shareBtn">Partager</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="grid">
+      <main>
+        <section class="card about">
+          <h3>Programme</h3>
+          <div class="promise">
+            <div class="dot">1</div>
+            <div>
+              <h4>Améliorer la communication</h4>
+              <p>Des réunions régulières pour remonter les problèmes et des sondages rapides en ligne.</p>
+            </div>
+          </div>
+          <div class="promise">
+            <div class="dot">2</div>
+            <div>
+              <h4>Respect & discipline</h4>
+              <p>Des règles claires pour garantir le respect mutuel et un climat de classe serein.</p>
+            </div>
+          </div>
+          <div class="promise">
+            <div class="dot">3</div>
+            <div>
+              <h4>Projets & activités</h4>
+              <p>Organisation d'ateliers, sorties et soutiens pour projets de classe.</p>
+            </div>
+          </div>
+
+          <h3 style="margin-top:14px">Qui suis‑je ?</h3>
+          <p>Je m'appelle <strong id="aboutName">Noham</strong>. Je veux être votre délégué parce que j'écoute, je m'investis et j'ai des idées concrètes pour améliorer notre année ensemble.</p>
+          <ul>
+            <li>Élève sérieux, bon relationnel</li>
+            <li>Expérience: représentations en club / organisateur d'événements</li>
+            <li>Disponible pour parler et aider</li>
+          </ul>
+
+          <h3 style="margin-top:14px">Mes engagements</h3>
+          <ol>
+            <li>Être votre porte‑parole fidèle</li>
+            <li>Transparence sur les décisions</li>
+            <li>Répondre rapidement aux problèmes</li>
+          </ol>
+
+          <h3 style="margin-top:14px">Contact</h3>
+          <p class="small">Utilise le formulaire pour m'envoyer un message rapide — tout reste local (stocké dans ton navigateur) ou ouvre ton messager.</p>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <input id="msgInput" placeholder="Ton message..." style="flex:1;padding:10px;border-radius:8px;border:1px solid rgba(30,40,80,0.06)" />
+            <button class="btn" id="sendMsg">Envoyer</button>
+          </div>
+        </section>
+
+        <section class="card" style="margin-top:14px">
+          <h3>Arguments rapides (pour ton bulletin)</h3>
+          <p class="small">Tu veux idées pour écrire un petit texte sur le bulletin de vote ? Copie‑colle ceci et adapte :</p>
+          <pre style="background:#fbfdff;padding:10px;border-radius:8px">Votez pour Noham : organisé, à l'écoute et motivé pour améliorer la vie de la classe.</pre>
+          <div style="margin-top:10px"><button class="btn secondary" id="copyPitch">Copier le texte</button></div>
+        </section>
+      </main>
+
+      <aside>
+        <div class="card">
+          <h3>Pétition / Signatures</h3>
+          <p class="small">Signez pour montrer votre soutien. Les signatures sont enregistrées localement et visibles ci‑dessous.</p>
+          <div class="stats">
+            <div class="stat"><div style="font-size:18px" id="count">0</div><div class="small">Soutiens</div></div>
+            <div class="stat"><div style="font-size:18px" id="goal">30</div><div class="small">Objectif</div></div>
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px">
+            <input id="signName" placeholder="Ton prénom" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(30,40,80,0.04)" />
+            <button class="btn" id="signBtn">Signer</button>
+          </div>
+
+          <div class="sign-list" id="signList">
+            <!-- signatures -->
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;justify-content:space-between;align-items:center">
+            <button class="btn secondary" id="exportBtn">Exporter</button>
+            <button class="btn secondary" id="printBtn">Imprimer flyer</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>Informations utiles</h3>
+          <p class="small">Conseils pour convaincre tes camarades :</p>
+          <ul class="small">
+            <li>Sois clair et poli</li>
+            <li>Présente 3 idées concrètes</li>
+            <li>Écoute puis propose des solutions</li>
+          </ul>
+        </div>
+
+      </aside>
+    </div>
+
+    <footer>
+      <p>par Noham .</p>
+    </footer>
+  </div>
+
+  <script>
+    const candidateName = document.getElementById('candidateName');
+    const aboutName = document.getElementById('aboutName');
+    const photo = document.getElementById('photo');
+    const countEl = document.getElementById('count');
+    const signList = document.getElementById('signList');
+    const goalEl = document.getElementById('goal');
+
+    const SIG_KEY = 'campagne_signatures_v1';
+    let signatures = JSON.parse(localStorage.getItem(SIG_KEY)) || [];
+
+    function renderSignatures(){
+      signList.innerHTML = '';
+      signatures.slice().reverse().forEach(s => {
+        const div = document.createElement('div'); div.className='sign-item';
+        div.textContent = `${s.name} ${s.note?(' — '+s.note):''}`;
+        signList.appendChild(div);
+      });
+      countEl.textContent = signatures.length;
+    }
+    renderSignatures();
+
+    document.getElementById('signBtn').addEventListener('click', () => {
+      const name = document.getElementById('signName').value.trim();
+      if(!name){alert('Indique ton prénom.');return}
+      signatures.push({name:name, date:new Date().toISOString()});
+      localStorage.setItem(SIG_KEY, JSON.stringify(signatures));
+      document.getElementById('signName').value='';
+      renderSignatures();
+      const btn = document.getElementById('signBtn'); btn.textContent='Merci ✓'; setTimeout(()=>btn.textContent='Signer',1500);
+    });
+
+    document.getElementById('voteBtn').addEventListener('click', ()=>{
+      const defaultName = prompt('Ton prénom pour signer la pétition ?');
+      if(defaultName){document.getElementById('signName').value = defaultName; document.getElementById('signBtn').click();}
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      if(!signatures.length){alert('Aucune signature à exporter.');return}
+      const csv = 'Prénom;Date\n' + signatures.map(s=>`${s.name};${s.date}`).join('\n');
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download = `signatures_Noham.csv`; a.click(); URL.revokeObjectURL(url);
+    });
+
+    document.getElementById('printBtn').addEventListener('click', ()=>{window.print();});
+
+    document.getElementById('copyPitch').addEventListener('click', ()=>{
+      const pitch = document.querySelector('pre').textContent;
+      navigator.clipboard?.writeText(pitch).then(()=>alert('Texte copié !')).catch(()=>alert('Impossible de copier')); 
+    });
+
+    document.getElementById('shareBtn').addEventListener('click', async ()=>{
+      const shareData = {title:`Votez Noham`, text:`Je soutiens Noham pour délégué de notre classe !`};
+      if(navigator.share){
+        try{ await navigator.share(shareData); }catch(e){}
+      } else {
+        navigator.clipboard?.writeText(`${shareData.title} — ${shareData.text}`);
+        alert('Message copié. Envoie-le à tes amis !');
+      }
+    });
+
+    document.getElementById('sendMsg').addEventListener('click', ()=>{
+      const txt = document.getElementById('msgInput').value.trim();
+      if(!txt){alert('Écris un message.');return}
+      const key = 'campagne_messages_v1';
+      const msgs = JSON.parse(localStorage.getItem(key) || '[]');
+      msgs.push({text:txt, date:new Date().toISOString()});
+      localStorage.setItem(key, JSON.stringify(msgs));
+      document.getElementById('msgInput').value='';
+      alert('Message enregistré localement.');
+    });
+
+    const savedPhoto = localStorage.getItem('campagne_photo'); if(savedPhoto){photo.style.backgroundImage = `url(${savedPhoto})`; photo.textContent='';}
+
+  </script>
+</body>
+</html>
