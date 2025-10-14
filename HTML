@@ -378,6 +378,7 @@
             <button class="touch-btn" id="btnJump" style="width:60px;height:60px;font-size:24px;">⏫</button>
             <button class="touch-btn" id="btnAction" style="width:60px;height:60px;font-size:24px;">⚔️</button>
             <button class="touch-btn" id="btnInteract" style="width:60px;height:60px;font-size:24px;">🗨️</button>
+            <button class="touch-btn" id="btnEnter" style="width:60px;height:60px;font-size:24px;background:rgba(100,50,200,0.8);border-color:#9370DB;display:none;">🚪</button>
         </div>
     </div>
 
@@ -397,6 +398,8 @@
         let animals = [];
         let indoorMode = false;
         let currentBuilding = null;
+        let composer, bloomPass;
+        let particleSystem = null;
 
         // État du joueur
         let playerStats = {
@@ -463,26 +466,42 @@
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 10, 10);
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+            // Renderer optimisé pour les performances
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: document.getElementById('gameCanvas'), 
+                antialias: false,
+                powerPreference: "high-performance"
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(1);
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.shadowMap.type = THREE.BasicShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.2;
 
-            // Lumières
-            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            // Lumières améliorées
+            const ambientLight = new THREE.AmbientLight(0x6495ED, 0.4);
             scene.add(ambientLight);
 
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            const directionalLight = new THREE.DirectionalLight(0xFFF5E1, 1.5);
             directionalLight.position.set(50, 100, 50);
             directionalLight.castShadow = true;
-            directionalLight.shadow.camera.left = -100;
-            directionalLight.shadow.camera.right = 100;
-            directionalLight.shadow.camera.top = 100;
-            directionalLight.shadow.camera.bottom = -100;
-            directionalLight.shadow.mapSize.width = 2048;
-            directionalLight.shadow.mapSize.height = 2048;
+            directionalLight.shadow.camera.left = -150;
+            directionalLight.shadow.camera.right = 150;
+            directionalLight.shadow.camera.top = 150;
+            directionalLight.shadow.camera.bottom = -150;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.bias = -0.0001;
             scene.add(directionalLight);
+
+            // Lumière d'appoint pour un meilleur rendu
+            const hemisphereLight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 0.6);
+            scene.add(hemisphereLight);
+
+            // Fog atmosphérique
+            scene.fog = new THREE.Fog(0x87CEEB, 50, 400);
 
             // Créer le monde
             createWorld();
@@ -503,6 +522,17 @@
             spawnEnemies();
             spawnChests();
             spawnAnimals();
+            
+            // Nouveau contenu
+            createMerchantShop(70, 0, 70);
+            createBlacksmith(30, 0, 70);
+            createTavern(50, 0, 30);
+            createFishingSpot(-50, 0, 100);
+            createMiningArea(120, 0, -80);
+            createSecretCave(-200, 0, 50);
+            spawnBossZones();
+            createQuestNPCs();
+            createCollectibles();
 
             // Événements
             setupControls();
@@ -518,15 +548,40 @@
         }
 
         function createWorld() {
-            const terrainGeometry = new THREE.PlaneGeometry(1000, 1000, 100, 100);
-            const terrainMaterial = new THREE.MeshLambertMaterial({ 
-                color: 0x00FF00,
-                wireframe: false
+            // Terrain avec texture procédurale
+            const terrainGeometry = new THREE.PlaneGeometry(1000, 1000, 150, 150);
+            
+            // Canvas pour créer une texture d'herbe
+            const grassCanvas = document.createElement('canvas');
+            grassCanvas.width = 512;
+            grassCanvas.height = 512;
+            const ctx = grassCanvas.getContext('2d');
+            
+            // Texture d'herbe procédurale
+            for (let i = 0; i < 512; i++) {
+                for (let j = 0; j < 512; j++) {
+                    const noise = Math.random() * 30;
+                    const green = 100 + noise;
+                    ctx.fillStyle = `rgb(${noise}, ${green}, ${noise * 0.5})`;
+                    ctx.fillRect(i, j, 1, 1);
+                }
+            }
+            
+            const grassTexture = new THREE.CanvasTexture(grassCanvas);
+            grassTexture.wrapS = THREE.RepeatWrapping;
+            grassTexture.wrapT = THREE.RepeatWrapping;
+            grassTexture.repeat.set(20, 20);
+            
+            const terrainMaterial = new THREE.MeshStandardMaterial({ 
+                map: grassTexture,
+                roughness: 0.9,
+                metalness: 0.1
             });
 
             const vertices = terrainGeometry.attributes.position.array;
             for (let i = 0; i < vertices.length; i += 3) {
-                vertices[i + 2] = Math.sin(vertices[i] * 0.05) * Math.cos(vertices[i + 1] * 0.05) * 3;
+                vertices[i + 2] = Math.sin(vertices[i] * 0.05) * Math.cos(vertices[i + 1] * 0.05) * 4 + 
+                                  Math.random() * 0.5;
             }
             terrainGeometry.computeVertexNormals();
 
@@ -536,57 +591,174 @@
             scene.add(terrain);
             world.terrain = terrain;
 
-            const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
-            const skyMaterial = new THREE.MeshBasicMaterial({
-                color: 0x87CEEB,
+            // Ciel avec dégradé amélioré
+            const skyGeometry = new THREE.SphereGeometry(500, 64, 64);
+            const vertexShader = `
+                varying vec3 vWorldPosition;
+                void main() {
+                    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+                    vWorldPosition = worldPosition.xyz;
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+                }
+            `;
+            const fragmentShader = `
+                uniform vec3 topColor;
+                uniform vec3 bottomColor;
+                varying vec3 vWorldPosition;
+                void main() {
+                    float h = normalize(vWorldPosition).y;
+                    gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h, 0.0), 0.6), 0.0)), 1.0);
+                }
+            `;
+            const skyMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    topColor: { value: new THREE.Color(0x0077ff) },
+                    bottomColor: { value: new THREE.Color(0xffffff) }
+                },
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
                 side: THREE.BackSide
             });
             const sky = new THREE.Mesh(skyGeometry, skyMaterial);
             scene.add(sky);
+            world.sky = sky;
+
+            // Système de particules ambiantes (papillons, poussière)
+            createAmbientParticles();
+        }
+
+        function createAmbientParticles() {
+            const particleCount = 50;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 400;
+                positions[i + 1] = Math.random() * 50 + 5;
+                positions[i + 2] = (Math.random() - 0.5) * 400;
+                
+                const color = new THREE.Color();
+                color.setHSL(Math.random(), 0.7, 0.7);
+                colors[i] = color.r;
+                colors[i + 1] = color.g;
+                colors[i + 2] = color.b;
+            }
+            
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            
+            const material = new THREE.PointsMaterial({
+                size: 0.3,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.6,
+                blending: THREE.AdditiveBlending
+            });
+            
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
         }
 
         function createPlayer() {
             const playerGroup = new THREE.Group();
 
+            // Corps avec matériaux PBR
             const bodyGeometry = new THREE.BoxGeometry(1, 1.5, 0.5);
-            const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x4169E1 });
+            const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x4169E1,
+                roughness: 0.7,
+                metalness: 0.2,
+                emissive: 0x001144,
+                emissiveIntensity: 0.2
+            });
             const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
             body.position.y = 1;
             body.castShadow = true;
+            body.receiveShadow = true;
             playerGroup.add(body);
 
-            const headGeometry = new THREE.SphereGeometry(0.4, 8, 8);
-            const headMaterial = new THREE.MeshLambertMaterial({ color: 0xFFDBBB });
+            // Tête avec meilleur rendu
+            const headGeometry = new THREE.SphereGeometry(0.4, 16, 16);
+            const headMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xFFDBBB,
+                roughness: 0.8,
+                metalness: 0.1
+            });
             const head = new THREE.Mesh(headGeometry, headMaterial);
             head.position.y = 2.2;
             head.castShadow = true;
+            head.receiveShadow = true;
             playerGroup.add(head);
 
+            // Yeux brillants
+            const eyeGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+            const eyeMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xFFFFFF,
+                emissive: 0x4169E1,
+                emissiveIntensity: 0.5
+            });
+            const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            leftEye.position.set(-0.15, 2.3, 0.35);
+            playerGroup.add(leftEye);
+            
+            const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            rightEye.position.set(0.15, 2.3, 0.35);
+            playerGroup.add(rightEye);
+
+            // Bras avec matériaux améliorés
             const armGeometry = new THREE.BoxGeometry(0.3, 1, 0.3);
-            const armMaterial = new THREE.MeshLambertMaterial({ color: 0xFFDBBB });
+            const armMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xFFDBBB,
+                roughness: 0.8,
+                metalness: 0.1
+            });
 
             const leftArm = new THREE.Mesh(armGeometry, armMaterial);
             leftArm.position.set(-0.7, 1, 0);
             leftArm.castShadow = true;
+            leftArm.receiveShadow = true;
             playerGroup.add(leftArm);
 
             const rightArm = new THREE.Mesh(armGeometry, armMaterial);
             rightArm.position.set(0.7, 1, 0);
             rightArm.castShadow = true;
+            rightArm.receiveShadow = true;
             playerGroup.add(rightArm);
 
+            // Jambes
             const legGeometry = new THREE.BoxGeometry(0.4, 1, 0.4);
-            const legMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+            const legMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x333333,
+                roughness: 0.6,
+                metalness: 0.3
+            });
 
             const leftLeg = new THREE.Mesh(legGeometry, legMaterial);
             leftLeg.position.set(-0.3, 0, 0);
             leftLeg.castShadow = true;
+            leftLeg.receiveShadow = true;
             playerGroup.add(leftLeg);
 
             const rightLeg = new THREE.Mesh(legGeometry, legMaterial);
             rightLeg.position.set(0.3, 0, 0);
             rightLeg.castShadow = true;
+            rightLeg.receiveShadow = true;
             playerGroup.add(rightLeg);
+
+            // Aura de héros
+            const auraGeometry = new THREE.RingGeometry(0.8, 1.2, 32);
+            const auraMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xFFD700,
+                transparent: true,
+                opacity: 0.3,
+                side: THREE.DoubleSide
+            });
+            const aura = new THREE.Mesh(auraGeometry, auraMaterial);
+            aura.rotation.x = -Math.PI / 2;
+            aura.position.y = 0.05;
+            aura.name = 'playerAura';
+            playerGroup.add(aura);
 
             playerGroup.position.set(0, 2, 0);
             scene.add(playerGroup);
@@ -656,7 +828,7 @@
         }
 
         function spawnAnimals() {
-            for (let i = 0; i < 15; i++) {
+            for (let i = 0; i < 8; i++) {
                 const x = (Math.random() - 0.5) * 400;
                 const z = (Math.random() - 0.5) * 400;
                 createRabbit(x, 0, z);
@@ -743,38 +915,88 @@
         function createHouse(x, y, z) {
             const house = new THREE.Group();
 
+            // Murs avec texture de brique
             const wallGeometry = new THREE.BoxGeometry(8, 6, 8);
-            const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x8B4513,
+                roughness: 0.9,
+                metalness: 0.1
+            });
             const walls = new THREE.Mesh(wallGeometry, wallMaterial);
             walls.position.y = 3;
             walls.castShadow = true;
             walls.receiveShadow = true;
             house.add(walls);
 
+            // Toit avec tuiles
             const roofGeometry = new THREE.ConeGeometry(6, 4, 4);
-            const roofMaterial = new THREE.MeshLambertMaterial({ color: 0x8B0000 });
+            const roofMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x8B0000,
+                roughness: 0.7,
+                metalness: 0.2
+            });
             const roof = new THREE.Mesh(roofGeometry, roofMaterial);
             roof.position.y = 8;
             roof.rotation.y = Math.PI / 4;
             roof.castShadow = true;
             house.add(roof);
 
-            const doorGeometry = new THREE.BoxGeometry(2, 4, 0.2);
-            const doorMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+            // Porte en bois avec détails
+            const doorGeometry = new THREE.BoxGeometry(2, 4, 0.3);
+            const doorMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x654321,
+                roughness: 0.8,
+                metalness: 0.1
+            });
             const door = new THREE.Mesh(doorGeometry, doorMaterial);
-            door.position.set(0, 2, 4);
+            door.position.set(0, 2, 4.1);
+            door.castShadow = true;
             house.add(door);
 
+            // Poignée de porte dorée
+            const handleGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+            const handleMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0xFFD700,
+                roughness: 0.3,
+                metalness: 0.9,
+                emissive: 0x554400,
+                emissiveIntensity: 0.3
+            });
+            const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+            handle.position.set(0.8, 2, 4.3);
+            house.add(handle);
+
+            // Fenêtres avec reflets
             const windowGeometry = new THREE.BoxGeometry(1.5, 1.5, 0.2);
-            const windowMaterial = new THREE.MeshLambertMaterial({ color: 0x87CEEB });
+            const windowMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x87CEEB,
+                roughness: 0.1,
+                metalness: 0.9,
+                transparent: true,
+                opacity: 0.8
+            });
 
             const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
-            window1.position.set(2.5, 3, 4);
+            window1.position.set(2.5, 3, 4.1);
             house.add(window1);
 
             const window2 = new THREE.Mesh(windowGeometry, windowMaterial);
-            window2.position.set(-2.5, 3, 4);
+            window2.position.set(-2.5, 3, 4.1);
             house.add(window2);
+
+            // Cheminée avec fumée
+            const chimneyGeometry = new THREE.BoxGeometry(1, 3, 1);
+            const chimneyMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x696969,
+                roughness: 0.9
+            });
+            const chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
+            chimney.position.set(2, 8.5, 0);
+            chimney.castShadow = true;
+            house.add(chimney);
+
+            // Fumée de cheminée
+            createSmoke(x + 2, y + 10, z);
 
             house.position.set(x, y, z);
             house.userData = { 
@@ -786,6 +1008,31 @@
             buildings.push(house);
 
             createInteriorDecoration(x, y, z);
+        }
+
+        function createSmoke(x, y, z) {
+            const smokeGeometry = new THREE.SphereGeometry(0.5, 8, 8);
+            const smokeMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xCCCCCC,
+                transparent: true,
+                opacity: 0.5
+            });
+            
+            for (let i = 0; i < 3; i++) {
+                const smoke = new THREE.Mesh(smokeGeometry, smokeMaterial.clone());
+                smoke.position.set(x, y + i * 0.5, z);
+                smoke.userData = {
+                    type: 'smoke',
+                    velocity: new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.02,
+                        0.05,
+                        (Math.random() - 0.5) * 0.02
+                    ),
+                    lifetime: 0
+                };
+                scene.add(smoke);
+                particles.push(smoke);
+            }
         }
 
         function createInteriorDecoration(houseX, houseY, houseZ) {
@@ -1122,7 +1369,7 @@
         }
 
         function createForest() {
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 50; i++) {
                 const x = (Math.random() - 0.5) * 400;
                 const z = (Math.random() - 0.5) * 400;
 
@@ -1137,21 +1384,74 @@
         function createTree(x, y, z) {
             const tree = new THREE.Group();
 
-            const trunkGeometry = new THREE.CylinderGeometry(1, 1.5, 8, 8);
-            const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+            // Tronc avec texture de bois
+            const trunkGeometry = new THREE.CylinderGeometry(1, 1.5, 8, 12);
+            const trunkMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x8B4513,
+                roughness: 0.9,
+                metalness: 0.1
+            });
             const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
             trunk.position.y = 4;
             trunk.castShadow = true;
+            trunk.receiveShadow = true;
             tree.add(trunk);
 
-            const leavesGeometry = new THREE.SphereGeometry(4, 8, 6);
-            const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
-            const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-            leaves.position.y = 9;
-            leaves.castShadow = true;
-            tree.add(leaves);
+            // Feuillage multicouche
+            const leavesGeometry = new THREE.SphereGeometry(4, 16, 12);
+            const leavesMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x228B22,
+                roughness: 0.8,
+                metalness: 0.1,
+                transparent: true,
+                opacity: 0.9
+            });
+            
+            const leaves1 = new THREE.Mesh(leavesGeometry, leavesMaterial);
+            leaves1.position.y = 9;
+            leaves1.castShadow = true;
+            leaves1.receiveShadow = true;
+            leaves1.name = 'leaves';
+            tree.add(leaves1);
+
+            const leaves2 = new THREE.Mesh(
+                new THREE.SphereGeometry(3, 12, 10), 
+                new THREE.MeshStandardMaterial({ 
+                    color: 0x32CD32,
+                    roughness: 0.8,
+                    transparent: true,
+                    opacity: 0.8
+                })
+            );
+            leaves2.position.y = 11;
+            leaves2.castShadow = true;
+            leaves2.name = 'leaves';
+            tree.add(leaves2);
+
+            // Fruits ou fleurs
+            if (Math.random() > 0.5) {
+                for (let i = 0; i < 5; i++) {
+                    const fruitGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+                    const fruitMaterial = new THREE.MeshStandardMaterial({ 
+                        color: Math.random() > 0.5 ? 0xFF6347 : 0xFFD700,
+                        roughness: 0.4,
+                        metalness: 0.2,
+                        emissive: 0xFF6347,
+                        emissiveIntensity: 0.2
+                    });
+                    const fruit = new THREE.Mesh(fruitGeometry, fruitMaterial);
+                    fruit.position.set(
+                        (Math.random() - 0.5) * 6,
+                        8 + Math.random() * 4,
+                        (Math.random() - 0.5) * 6
+                    );
+                    fruit.castShadow = true;
+                    tree.add(fruit);
+                }
+            }
 
             tree.position.set(x, y, z);
+            tree.userData = { type: 'tree', windPhase: Math.random() * Math.PI * 2 };
             scene.add(tree);
             trees.push(tree);
         }
@@ -1189,8 +1489,295 @@
             npcs.push(npcGroup);
         }
 
+        function createMerchantShop(x, y, z) {
+            const shop = new THREE.Group();
+            
+            const baseGeometry = new THREE.BoxGeometry(10, 7, 10);
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x8B7355, roughness: 0.8 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 3.5;
+            base.castShadow = true;
+            shop.add(base);
+            
+            const roofGeometry = new THREE.ConeGeometry(7, 3, 4);
+            const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x4169E1 });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.y = 8;
+            roof.rotation.y = Math.PI / 4;
+            roof.castShadow = true;
+            shop.add(roof);
+            
+            const signGeometry = new THREE.BoxGeometry(3, 1.5, 0.2);
+            const signMaterial = new THREE.MeshStandardMaterial({ color: 0xFFD700 });
+            const sign = new THREE.Mesh(signGeometry, signMaterial);
+            sign.position.set(0, 6, 5.2);
+            shop.add(sign);
+            
+            shop.position.set(x, y, z);
+            shop.userData = { type: 'shop', hasInterior: true, interior: { x: x, y: y + 1, z: z } };
+            scene.add(shop);
+            buildings.push(shop);
+            
+            createNPC(x + 6, y, z, 'Marchand', 0x9370DB);
+        }
+
+        function createBlacksmith(x, y, z) {
+            const forge = new THREE.Group();
+            
+            const baseGeometry = new THREE.BoxGeometry(12, 8, 12);
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x696969, roughness: 0.9 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 4;
+            base.castShadow = true;
+            forge.add(base);
+            
+            const chimneyGeometry = new THREE.CylinderGeometry(1, 1.5, 6, 8);
+            const chimneyMaterial = new THREE.MeshStandardMaterial({ color: 0x2F4F4F });
+            const chimney = new THREE.Mesh(chimneyGeometry, chimneyMaterial);
+            chimney.position.set(3, 8, 0);
+            chimney.castShadow = true;
+            forge.add(chimney);
+            
+            createSmoke(x + 3, y + 11, z);
+            
+            const anvilGeometry = new THREE.BoxGeometry(1.5, 1, 0.8);
+            const anvilMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.9 });
+            const anvil = new THREE.Mesh(anvilGeometry, anvilMaterial);
+            anvil.position.set(x + 5, y + 0.5, z + 5);
+            anvil.castShadow = true;
+            scene.add(anvil);
+            
+            forge.position.set(x, y, z);
+            forge.userData = { type: 'blacksmith', hasInterior: true, interior: { x: x, y: y + 1, z: z } };
+            scene.add(forge);
+            buildings.push(forge);
+            
+            createNPC(x + 7, y, z, 'Forgeron', 0x8B4513);
+        }
+
+        function createTavern(x, y, z) {
+            const tavern = new THREE.Group();
+            
+            const baseGeometry = new THREE.BoxGeometry(15, 8, 12);
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0xD2691E, roughness: 0.8 });
+            const base = new THREE.Mesh(baseGeometry, baseMaterial);
+            base.position.y = 4;
+            base.castShadow = true;
+            tavern.add(base);
+            
+            const roofGeometry = new THREE.ConeGeometry(10, 4, 4);
+            const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x8B0000 });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.y = 9;
+            roof.rotation.y = Math.PI / 4;
+            roof.castShadow = true;
+            tavern.add(roof);
+            
+            for (let i = -1; i <= 1; i++) {
+                const lampPost = new THREE.CylinderGeometry(0.15, 0.15, 3, 8);
+                const lamp = new THREE.Mesh(lampPost, new THREE.MeshStandardMaterial({ color: 0x8B4513 }));
+                lamp.position.set(i * 5, 1.5, 7);
+                tavern.add(lamp);
+                
+                const light = new THREE.PointLight(0xFFA500, 1.5, 10);
+                light.position.set(x + i * 5, y + 3, z + 7);
+                scene.add(light);
+            }
+            
+            tavern.position.set(x, y, z);
+            tavern.userData = { type: 'tavern', hasInterior: true, interior: { x: x, y: y + 1, z: z } };
+            scene.add(tavern);
+            buildings.push(tavern);
+            
+            createNPC(x + 8, y, z, 'Aubergiste', 0xDC143C);
+        }
+
+        function createFishingSpot(x, y, z) {
+            const pondGeometry = new THREE.CircleGeometry(15, 32);
+            const pondMaterial = new THREE.MeshStandardMaterial({ 
+                color: 0x1E90FF, 
+                transparent: true, 
+                opacity: 0.7,
+                roughness: 0.2
+            });
+            const pond = new THREE.Mesh(pondGeometry, pondMaterial);
+            pond.rotation.x = -Math.PI / 2;
+            pond.position.set(x, y + 0.1, z);
+            pond.userData = { type: 'fishing_spot' };
+            scene.add(pond);
+            
+            for (let i = 0; i < 8; i++) {
+                const angle = (i / 8) * Math.PI * 2;
+                const rx = Math.cos(angle) * 16;
+                const rz = Math.sin(angle) * 16;
+                
+                const reed = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.1, 0.1, 2, 8),
+                    new THREE.MeshStandardMaterial({ color: 0x228B22 })
+                );
+                reed.position.set(x + rx, y + 1, z + rz);
+                reed.castShadow = true;
+                scene.add(reed);
+            }
+            
+            createNPC(x + 18, y, z, 'Pêcheur', 0x4682B4);
+        }
+
+        function createMiningArea(x, y, z) {
+            for (let i = 0; i < 6; i++) {
+                const rockGeometry = new THREE.DodecahedronGeometry(2 + Math.random() * 2, 0);
+                const rockMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x696969,
+                    roughness: 0.9,
+                    metalness: 0.3
+                });
+                const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                rock.position.set(
+                    x + (Math.random() - 0.5) * 20,
+                    y + 1,
+                    z + (Math.random() - 0.5) * 20
+                );
+                rock.castShadow = true;
+                rock.userData = { type: 'mineable', health: 50, ore: Math.random() > 0.5 ? 'iron' : 'gold' };
+                scene.add(rock);
+                items.push(rock);
+            }
+            
+            createNPC(x, y, z, 'Mineur', 0x8B4513);
+        }
+
+        function createSecretCave(x, y, z) {
+            const caveEntrance = new THREE.Mesh(
+                new THREE.CylinderGeometry(4, 5, 8, 8),
+                new THREE.MeshStandardMaterial({ color: 0x2F4F4F })
+            );
+            caveEntrance.position.set(x, y + 4, z);
+            caveEntrance.rotation.x = Math.PI / 2;
+            caveEntrance.castShadow = true;
+            caveEntrance.userData = { type: 'cave', hasInterior: true, interior: { x: x, y: y + 1, z: z + 20 } };
+            scene.add(caveEntrance);
+            buildings.push(caveEntrance);
+            
+            const crystals = [];
+            for (let i = 0; i < 5; i++) {
+                const crystal = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.5, 2, 6),
+                    new THREE.MeshStandardMaterial({ 
+                        color: 0x00FFFF,
+                        emissive: 0x00FFFF,
+                        emissiveIntensity: 0.5,
+                        transparent: true,
+                        opacity: 0.8
+                    })
+                );
+                crystal.position.set(
+                    x + (Math.random() - 0.5) * 8,
+                    y + 1,
+                    z + 5 + Math.random() * 3
+                );
+                crystal.castShadow = true;
+                scene.add(crystal);
+                crystals.push(crystal);
+            }
+        }
+
+        function spawnBossZones() {
+            const bossZones = [
+                { x: -150, z: -150, name: 'Dragon des Glaces' },
+                { x: 180, z: 180, name: 'Golem de Pierre' },
+                { x: -180, z: 180, name: 'Liche Ancienne' }
+            ];
+            
+            bossZones.forEach(zone => {
+                const marker = new THREE.Mesh(
+                    new THREE.TorusGeometry(10, 1, 16, 32),
+                    new THREE.MeshStandardMaterial({ 
+                        color: 0xFF0000,
+                        emissive: 0xFF0000,
+                        emissiveIntensity: 0.5
+                    })
+                );
+                marker.position.set(zone.x, 0.5, zone.z);
+                marker.rotation.x = -Math.PI / 2;
+                scene.add(marker);
+                
+                createEnemy(zone.x, 1, zone.z, 'boss');
+            });
+        }
+
+        function createQuestNPCs() {
+            const quests = [
+                { x: 60, z: 40, name: 'Fermier', color: 0x8B4513, quest: 'Trouve 10 lapins perdus' },
+                { x: 40, z: 60, name: 'Garde', color: 0x4169E1, quest: 'Élimine 5 gobelins' },
+                { x: 55, z: 55, name: 'Sage', color: 0x9370DB, quest: 'Collecte 3 cristaux magiques' }
+            ];
+            
+            quests.forEach(q => {
+                const npc = new THREE.Group();
+                
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.8, 1.2, 0.4),
+                    new THREE.MeshLambertMaterial({ color: q.color })
+                );
+                body.position.y = 0.8;
+                body.castShadow = true;
+                npc.add(body);
+                
+                const head = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.3, 8, 8),
+                    new THREE.MeshLambertMaterial({ color: 0xFFDBBB })
+                );
+                head.position.y = 1.8;
+                head.castShadow = true;
+                npc.add(head);
+                
+                const exclamation = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.3, 1, 4),
+                    new THREE.MeshBasicMaterial({ color: 0xFFD700 })
+                );
+                exclamation.position.y = 3;
+                npc.add(exclamation);
+                
+                npc.position.set(q.x, 1, q.z);
+                npc.userData = { type: 'quest_npc', name: q.name, quest: q.quest };
+                scene.add(npc);
+                npcs.push(npc);
+            });
+        }
+
+        function createCollectibles() {
+            const collectibles = [
+                { type: 'coin', count: 15, icon: 0xFFD700 },
+                { type: 'gem', count: 8, icon: 0x00FF00 },
+                { type: 'artifact', count: 2, icon: 0xFF00FF }
+            ];
+            
+            collectibles.forEach(c => {
+                for (let i = 0; i < c.count; i++) {
+                    const item = new THREE.Mesh(
+                        new THREE.OctahedronGeometry(0.5, 0),
+                        new THREE.MeshStandardMaterial({ 
+                            color: c.icon,
+                            emissive: c.icon,
+                            emissiveIntensity: 0.4,
+                            metalness: 0.8
+                        })
+                    );
+                    item.position.set(
+                        (Math.random() - 0.5) * 400,
+                        1 + Math.random() * 2,
+                        (Math.random() - 0.5) * 400
+                    );
+                    item.castShadow = true;
+                    item.userData = { type: 'collectible', category: c.type, value: c.type === 'coin' ? 5 : c.type === 'gem' ? 20 : 100 };
+                    scene.add(item);
+                    items.push(item);
+                }
+            });
+        }
+
         function spawnEnemies() {
-            for (let i = 0; i < 20; i++) {
+            for (let i = 0; i < 12; i++) {
                 const x = (Math.random() - 0.5) * 300;
                 const z = (Math.random() - 0.5) * 300;
 
@@ -1204,15 +1791,39 @@
             const enemy = new THREE.Group();
 
             if (type === 'slime') {
-                const slimeGeometry = new THREE.SphereGeometry(0.8, 8, 6);
-                const slimeMaterial = new THREE.MeshLambertMaterial({ 
+                const slimeGeometry = new THREE.SphereGeometry(0.8, 16, 12);
+                const slimeMaterial = new THREE.MeshStandardMaterial({ 
                     color: 0x00FF00,
                     transparent: true,
-                    opacity: 0.8
+                    opacity: 0.8,
+                    roughness: 0.3,
+                    metalness: 0.6,
+                    emissive: 0x00FF00,
+                    emissiveIntensity: 0.3
                 });
                 const slimeBody = new THREE.Mesh(slimeGeometry, slimeMaterial);
                 slimeBody.castShadow = true;
+                slimeBody.receiveShadow = true;
                 enemy.add(slimeBody);
+
+                // Yeux du slime
+                const eyeGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+                const eyeMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xFFFFFF,
+                    emissive: 0xFF0000,
+                    emissiveIntensity: 0.5
+                });
+                const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                leftEye.position.set(-0.3, 0.3, 0.6);
+                enemy.add(leftEye);
+                const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                rightEye.position.set(0.3, 0.3, 0.6);
+                enemy.add(rightEye);
+
+                // Lumière du slime
+                const slimeLight = new THREE.PointLight(0x00FF00, 1, 5);
+                slimeLight.position.y = 0.5;
+                enemy.add(slimeLight);
 
                 enemy.userData = {
                     type: 'enemy',
@@ -1226,18 +1837,41 @@
                 };
             } else if (type === 'goblin') {
                 const bodyGeometry = new THREE.BoxGeometry(0.6, 0.8, 0.3);
-                const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x4B8B3B });
+                const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x4B8B3B,
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
                 const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
                 body.position.y = 0.5;
                 body.castShadow = true;
+                body.receiveShadow = true;
                 enemy.add(body);
 
-                const headGeometry = new THREE.SphereGeometry(0.3, 6, 6);
-                const headMaterial = new THREE.MeshLambertMaterial({ color: 0x4B8B3B });
+                const headGeometry = new THREE.SphereGeometry(0.3, 12, 12);
+                const headMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x4B8B3B,
+                    roughness: 0.7
+                });
                 const head = new THREE.Mesh(headGeometry, headMaterial);
                 head.position.y = 1.2;
                 head.castShadow = true;
+                head.receiveShadow = true;
                 enemy.add(head);
+
+                // Yeux rouges du gobelin
+                const eyeGeometry = new THREE.SphereGeometry(0.08, 8, 8);
+                const eyeMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xFF0000,
+                    emissive: 0xFF0000,
+                    emissiveIntensity: 0.8
+                });
+                const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                leftEye.position.set(-0.1, 1.25, 0.28);
+                enemy.add(leftEye);
+                const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+                rightEye.position.set(0.1, 1.25, 0.28);
+                enemy.add(rightEye);
 
                 enemy.userData = {
                     type: 'enemy',
@@ -1251,30 +1885,69 @@
                 };
             } else if (type === 'boss') {
                 const bodyGeometry = new THREE.BoxGeometry(2, 3, 1);
-                const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x8B0000 });
+                const bodyMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x8B0000,
+                    roughness: 0.4,
+                    metalness: 0.6,
+                    emissive: 0x8B0000,
+                    emissiveIntensity: 0.4
+                });
                 const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
                 body.position.y = 1.5;
                 body.castShadow = true;
+                body.receiveShadow = true;
                 enemy.add(body);
 
-                const headGeometry = new THREE.SphereGeometry(0.8, 8, 8);
-                const headMaterial = new THREE.MeshLambertMaterial({ color: 0x8B0000 });
+                const headGeometry = new THREE.SphereGeometry(0.8, 16, 16);
+                const headMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x8B0000,
+                    roughness: 0.5,
+                    metalness: 0.5,
+                    emissive: 0x8B0000,
+                    emissiveIntensity: 0.3
+                });
                 const head = new THREE.Mesh(headGeometry, headMaterial);
                 head.position.y = 3.5;
                 head.castShadow = true;
+                head.receiveShadow = true;
                 enemy.add(head);
 
-                const hornGeometry = new THREE.ConeGeometry(0.2, 1, 4);
-                const hornMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+                const hornGeometry = new THREE.ConeGeometry(0.2, 1, 8);
+                const hornMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0x333333,
+                    roughness: 0.3,
+                    metalness: 0.8
+                });
                 const leftHorn = new THREE.Mesh(hornGeometry, hornMaterial);
                 leftHorn.position.set(-0.4, 4.2, 0);
                 leftHorn.rotation.z = -0.3;
+                leftHorn.castShadow = true;
                 enemy.add(leftHorn);
 
                 const rightHorn = new THREE.Mesh(hornGeometry, hornMaterial);
                 rightHorn.position.set(0.4, 4.2, 0);
                 rightHorn.rotation.z = 0.3;
+                rightHorn.castShadow = true;
                 enemy.add(rightHorn);
+
+                // Aura du boss
+                const auraGeometry = new THREE.RingGeometry(2, 3, 32);
+                const auraMaterial = new THREE.MeshBasicMaterial({ 
+                    color: 0xFF0000,
+                    transparent: true,
+                    opacity: 0.4,
+                    side: THREE.DoubleSide
+                });
+                const aura = new THREE.Mesh(auraGeometry, auraMaterial);
+                aura.rotation.x = -Math.PI / 2;
+                aura.position.y = 0.1;
+                aura.name = 'bossAura';
+                enemy.add(aura);
+
+                // Lumière rouge du boss
+                const bossLight = new THREE.PointLight(0xFF0000, 3, 15);
+                bossLight.position.y = 2;
+                enemy.add(bossLight);
 
                 enemy.userData = {
                     type: 'enemy',
@@ -1431,9 +2104,19 @@
             const btnAction = document.getElementById('btnAction');
             const btnInteract = document.getElementById('btnInteract');
 
+            const btnEnter = document.getElementById('btnEnter');
+
             btnJump.addEventListener('touchstart', (e) => { e.preventDefault(); touchKeys['jump'] = true; });
             btnAction.addEventListener('touchstart', (e) => { e.preventDefault(); performAction(); });
             btnInteract.addEventListener('touchstart', (e) => { e.preventDefault(); checkInteractions(); });
+            btnEnter.addEventListener('touchstart', (e) => { 
+                e.preventDefault(); 
+                if (indoorMode) {
+                    exitBuilding();
+                } else {
+                    tryEnterBuilding();
+                }
+            });
 
             btnJump.addEventListener('touchend', () => { touchKeys['jump'] = false; });
         }
@@ -1507,60 +2190,119 @@
             const playerPos = player.position.clone();
 
             items.forEach((item, index) => {
-                if (item.userData.type === 'sword_item') {
-                    const distance = playerPos.distanceTo(item.position);
-                    if (distance < 3) {
-                        playerStats.hasSword = true;
+                const distance = playerPos.distanceTo(item.position);
+                
+                if (item.userData.type === 'sword_item' && distance < 3) {
+                    playerStats.hasSword = true;
+                    scene.remove(item);
+                    items.splice(index, 1);
+                    inventory[0] = { type: 'weapon', name: 'Épée', icon: '⚔️', damage: 10, quantity: 1 };
+                    addSwordToPlayer();
+                    showMessage("Vous avez trouvé l'épée légendaire !");
+                    updateInventoryUI();
+                }
+                
+                if (item.userData.type === 'puzzle_lever' && distance < 3 && !item.userData.activated) {
+                    activateLever(item);
+                }
+                
+                // Collecte automatique des objets
+                if (item.userData.type === 'collectible' && distance < 2) {
+                    const value = item.userData.value;
+                    playerStats.gold += value;
+                    scene.remove(item);
+                    items.splice(index, 1);
+                    showMessage(`+${value} Or collecté !`);
+                    
+                    // Effet visuel de collecte
+                    const flash = new THREE.PointLight(0xFFD700, 3, 8);
+                    flash.position.copy(item.position);
+                    scene.add(flash);
+                    setTimeout(() => scene.remove(flash), 200);
+                }
+                
+                // Minage de rochers
+                if (item.userData.type === 'mineable' && distance < 4 && keys['e'] && playerStats.hasSword) {
+                    item.userData.health -= 10;
+                    createDamageEffect(item.position);
+                    
+                    if (item.userData.health <= 0) {
+                        const ore = item.userData.ore;
+                        const goldValue = ore === 'gold' ? 30 : 10;
+                        playerStats.gold += goldValue;
                         scene.remove(item);
                         items.splice(index, 1);
-
-                        inventory[0] = { type: 'weapon', name: 'Épée', icon: '⚔️', damage: 10, quantity: 1 };
-
-                        addSwordToPlayer();
-
-                        showMessage("Vous avez trouvé l'épée légendaire !");
-                        updateInventoryUI();
+                        showMessage(`Minerai de ${ore === 'gold' ? 'OR' : 'FER'} obtenu ! +${goldValue} Or`);
                     }
+                    keys['e'] = false;
                 }
             });
 
-            items.forEach(item => {
-                if (item.userData.type === 'puzzle_lever') {
-                    const distance = playerPos.distanceTo(item.position);
-                    if (distance < 3 && !item.userData.activated) {
-                        activateLever(item);
-                    }
+            // Interactions avec NPCs de quête
+            npcs.forEach(npc => {
+                const distance = playerPos.distanceTo(npc.position);
+                if (distance < 5 && npc.userData.type === 'quest_npc') {
+                    showDialog(npc.userData.name, `Quête: ${npc.userData.quest}`);
                 }
             });
         }
 
         function checkDoorProximity() {
             const playerPos = player.position.clone();
+            const btnEnter = document.getElementById('btnEnter');
+            let nearBuilding = false;
 
             buildings.forEach(building => {
                 const distance = playerPos.distanceTo(building.position);
 
-                // Détecter la proximité d'une porte (maison ou donjon)
                 if (building.userData.hasInterior) {
                     if (building.userData.type === 'dungeon_door') {
-                        // Vérifier si c'est le premier donjon qui nécessite l'énigme
-                        if (building.position.x === -100 && building.position.z === -100) {
+                        // Donjon avec énigme (position -100, -100)
+                        if (Math.abs(building.position.x + 100) < 1 && Math.abs(building.position.z + 100) < 1) {
                             if (!dungeonPuzzleSolved) {
-                                if (distance < 8) {
-                                    showMessage("Porte verrouillée ! Appuyez sur E pour résoudre l'énigme");
+                                if (distance < 12) {
+                                    showMessage("Porte verrouillée ! Résolvez l'énigme à l'intérieur de la salle d'entrée");
+                                    nearBuilding = false; // Ne pas afficher le bouton d'entrée
                                 }
                                 return;
                             }
                         }
-                        // Autres donjons sont accessibles directement
-                        if (distance < 8) {
-                            teleportToInterior(building);
+                        if (distance < 12) {
+                            showMessage("Appuyez sur E ou 🚪 pour entrer dans le donjon");
+                            nearBuilding = true;
                         }
                     } else {
-                        // Maisons normales - toutes accessibles
-                        if (distance < 8) {
-                            teleportToInterior(building);
+                        if (distance < 10) {
+                            showMessage("Appuyez sur E ou 🚪 pour entrer");
+                            nearBuilding = true;
                         }
+                    }
+                }
+            });
+
+            // Afficher/masquer le bouton d'entrée pour tablette
+            if (btnEnter) {
+                btnEnter.style.display = nearBuilding ? 'block' : 'none';
+            }
+        }
+
+        function tryEnterBuilding() {
+            const playerPos = player.position.clone();
+            buildings.forEach(building => {
+                if (building.userData.hasInterior) {
+                    const distance = playerPos.distanceTo(building.position);
+                    const maxDistance = building.userData.type === 'dungeon_door' ? 12 : 10;
+                    
+                    if (distance < maxDistance) {
+                        // Vérifier si c'est le donjon verrouillé
+                        if (building.userData.type === 'dungeon_door' && 
+                            Math.abs(building.position.x + 100) < 1 && 
+                            Math.abs(building.position.z + 100) < 1 && 
+                            !dungeonPuzzleSolved) {
+                            showMessage("Cette porte est verrouillée ! Trouvez un autre donjon ou résolvez l'énigme");
+                            return;
+                        }
+                        teleportToInterior(building);
                     }
                 }
             });
@@ -1578,91 +2320,155 @@
         }
 
         function teleportToInterior(building) {
-            // Éviter la téléportation multiple
             if (indoorMode) return;
 
-            const interior = building.userData.interior;
+            // Transition fade out
+            const fadeOverlay = document.createElement('div');
+            fadeOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none;';
+            document.body.appendChild(fadeOverlay);
+            
+            setTimeout(() => fadeOverlay.style.opacity = '1', 10);
 
-            // Cacher le monde extérieur
+            setTimeout(() => {
+                const interior = building.userData.interior;
 
-            if (building.userData.type === 'dungeon_door') {
-                if (!building.userData.interiorCreated) {
-                    createDungeonInterior(interior.x, interior.y, interior.z);
-                    building.userData.interiorCreated = true;
+                // Masquer éléments extérieurs pour optimisation
+                enemies.forEach(e => e.visible = false);
+                animals.forEach(a => a.visible = false);
+                trees.forEach(t => t.visible = false);
+                buildings.forEach(b => { if (b !== building) b.visible = false; });
+                chests.forEach(c => c.visible = false);
+                npcs.forEach(n => n.visible = false);
+                if (world.terrain) world.terrain.visible = false;
+                if (world.sky) world.sky.visible = false;
+                if (particleSystem) particleSystem.visible = false;
+
+                if (building.userData.type === 'dungeon_door') {
+                    if (!building.userData.interiorCreated) {
+                        createDungeonInterior(interior.x, interior.y, interior.z);
+                        building.userData.interiorCreated = true;
+                    }
+                    player.position.set(interior.x, interior.y + 2, interior.z + 5);
+                } else if (building.userData.type === 'house' || building.userData.type === 'start_house' || 
+                           building.userData.type === 'shop' || building.userData.type === 'blacksmith' || 
+                           building.userData.type === 'tavern' || building.userData.type === 'cave') {
+                    if (!building.userData.interiorCreated) {
+                        createHouseInterior(interior.x, interior.y, interior.z, building.userData.type);
+                        building.userData.interiorCreated = true;
+                    }
+                    player.position.set(interior.x, interior.y + 2, interior.z);
                 }
-                player.position.set(interior.x, interior.y + 2, interior.z + 5);
-            } else if (building.userData.type === 'house' || building.userData.type === 'start_house') {
-                if (!building.userData.interiorCreated) {
-                    createHouseInterior(interior.x, interior.y, interior.z, building.userData.type === 'start_house');
-                    building.userData.interiorCreated = true;
-                }
-                player.position.set(interior.x, interior.y + 2, interior.z);
-            }
 
-            indoorMode = true;
-            currentBuilding = building;
-            showMessage("Appuyez sur E pour sortir");
+                indoorMode = true;
+                currentBuilding = building;
+                
+                // Afficher le bouton de sortie pour tablette
+                const btnEnter = document.getElementById('btnEnter');
+                if (btnEnter) btnEnter.style.display = 'block';
+                
+                // Fade in
+                setTimeout(() => {
+                    fadeOverlay.style.opacity = '0';
+                    setTimeout(() => document.body.removeChild(fadeOverlay), 300);
+                    showMessage("Appuyez sur E ou 🚪 pour sortir");
+                }, 100);
+            }, 300);
         }
 
-        function createHouseInterior(x, y, z, isStartHouse) {
-            // Sol intérieur
-            const floorGeometry = new THREE.PlaneGeometry(10, 10);
-            const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x8B7355 });
+        function createHouseInterior(x, y, z, buildingType) {
+            const isStartHouse = buildingType === 'start_house';
+            const isShop = buildingType === 'shop';
+            const isBlacksmith = buildingType === 'blacksmith';
+            const isTavern = buildingType === 'tavern';
+            const isCave = buildingType === 'cave';
+            
+            // Dimensions adaptées au type
+            const roomSize = isTavern ? 14 : isCave ? 12 : 10;
+            const wallHeight = isCave ? 6 : 5;
+            
+            // Sol intérieur avec texture adaptée
+            const floorColor = isCave ? 0x2F4F4F : isBlacksmith ? 0x696969 : 0x8B7355;
+            const floorGeometry = new THREE.PlaneGeometry(roomSize, roomSize);
+            const floorMaterial = new THREE.MeshStandardMaterial({ 
+                color: floorColor,
+                roughness: 0.9
+            });
             const floor = new THREE.Mesh(floorGeometry, floorMaterial);
             floor.rotation.x = -Math.PI / 2;
             floor.position.set(x, y, z);
             floor.receiveShadow = true;
-            floor.userData = { type: 'interior', parentBuilding: currentBuilding };
+            floor.userData = { type: 'interior' };
             scene.add(floor);
 
-            // Murs intérieurs
-            const wallHeight = 5;
-            const wallMaterial = new THREE.MeshLambertMaterial({ color: 0xD2B48C });
+            // Murs intérieurs avec couleur adaptée
+            const wallColor = isCave ? 0x1a1a1a : isBlacksmith ? 0x4B4B4B : 0xD2B48C;
+            const wallMaterial = new THREE.MeshStandardMaterial({ 
+                color: wallColor,
+                roughness: 0.9
+            });
 
-            // Mur nord
-            const wallNorth = new THREE.Mesh(new THREE.PlaneGeometry(10, wallHeight), wallMaterial);
-            wallNorth.position.set(x, y + wallHeight/2, z - 5);
+            // Murs avec géométrie partagée pour optimisation
+            const wallGeometry = new THREE.PlaneGeometry(roomSize, wallHeight);
+            
+            const wallNorth = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallNorth.position.set(x, y + wallHeight/2, z - roomSize/2);
             wallNorth.receiveShadow = true;
             wallNorth.userData = { type: 'interior' };
             scene.add(wallNorth);
 
-            // Mur sud
-            const wallSouth = new THREE.Mesh(new THREE.PlaneGeometry(10, wallHeight), wallMaterial);
-            wallSouth.position.set(x, y + wallHeight/2, z + 5);
+            const wallSouth = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallSouth.position.set(x, y + wallHeight/2, z + roomSize/2);
             wallSouth.rotation.y = Math.PI;
             wallSouth.receiveShadow = true;
             wallSouth.userData = { type: 'interior' };
             scene.add(wallSouth);
 
-            // Mur est
-            const wallEast = new THREE.Mesh(new THREE.PlaneGeometry(10, wallHeight), wallMaterial);
-            wallEast.position.set(x + 5, y + wallHeight/2, z);
+            const wallEast = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallEast.position.set(x + roomSize/2, y + wallHeight/2, z);
             wallEast.rotation.y = -Math.PI / 2;
             wallEast.receiveShadow = true;
             wallEast.userData = { type: 'interior' };
             scene.add(wallEast);
 
-            // Mur ouest
-            const wallWest = new THREE.Mesh(new THREE.PlaneGeometry(10, wallHeight), wallMaterial);
-            wallWest.position.set(x - 5, y + wallHeight/2, z);
+            const wallWest = new THREE.Mesh(wallGeometry, wallMaterial);
+            wallWest.position.set(x - roomSize/2, y + wallHeight/2, z);
             wallWest.rotation.y = Math.PI / 2;
             wallWest.receiveShadow = true;
             wallWest.userData = { type: 'interior' };
             scene.add(wallWest);
 
             // Plafond
-            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.MeshLambertMaterial({ color: 0x654321 }));
+            const ceilingColor = isCave ? 0x000000 : isBlacksmith ? 0x2F4F4F : 0x654321;
+            const ceiling = new THREE.Mesh(
+                new THREE.PlaneGeometry(roomSize, roomSize), 
+                new THREE.MeshStandardMaterial({ color: ceilingColor, roughness: 0.9 })
+            );
             ceiling.rotation.x = Math.PI / 2;
             ceiling.position.set(x, y + wallHeight, z);
             ceiling.userData = { type: 'interior' };
             scene.add(ceiling);
 
-            // Lumière intérieure
-            const interiorLight = new THREE.PointLight(0xFFE4B5, 1, 15);
-            interiorLight.position.set(x, y + 4, z);
+            // Lumière intérieure adaptée
+            const lightColor = isCave ? 0x00FFFF : isBlacksmith ? 0xFF6600 : isTavern ? 0xFFAA00 : 0xFFE4B5;
+            const lightIntensity = isCave ? 0.8 : isBlacksmith ? 1.5 : 1.2;
+            const interiorLight = new THREE.PointLight(lightColor, lightIntensity, roomSize * 1.5);
+            interiorLight.position.set(x, y + wallHeight - 1, z);
             interiorLight.castShadow = true;
             interiorLight.userData = { type: 'interior' };
             scene.add(interiorLight);
+            
+            // Lumières additionnelles pour grandes salles
+            if (isTavern || isCave) {
+                const light2 = new THREE.PointLight(lightColor, lightIntensity * 0.6, 10);
+                light2.position.set(x - roomSize/3, y + wallHeight - 1, z - roomSize/3);
+                light2.userData = { type: 'interior' };
+                scene.add(light2);
+                
+                const light3 = new THREE.PointLight(lightColor, lightIntensity * 0.6, 10);
+                light3.position.set(x + roomSize/3, y + wallHeight - 1, z + roomSize/3);
+                light3.userData = { type: 'interior' };
+                scene.add(light3);
+            }
 
             // Table
             const tableTop = new THREE.Mesh(
@@ -1770,38 +2576,92 @@
         }
 
         function activateLever(lever) {
-            lever.userData.activated = true;
-            lever.rotation.x = Math.PI / 4;
-            lever.material.color.setHex(0x00FF00);
-
+            // Vérifier si le levier est dans le bon ordre (1,2,3,4)
             const activatedLevers = items.filter(item => 
                 item.userData.type === 'puzzle_lever' && item.userData.activated
             );
-
-            if (activatedLevers.length === 4) {
-                dungeonPuzzleSolved = true;
-                showMessage("Énigme résolue ! La porte du boss est ouverte !");
+            
+            const expectedOrder = activatedLevers.length + 1;
+            
+            if (lever.userData.order === expectedOrder) {
+                lever.userData.activated = true;
+                lever.rotation.x = Math.PI / 4;
+                lever.material.color.setHex(0x00FF00);
+                
+                showMessage(`Levier ${lever.userData.order} activé correctement ! (${activatedLevers.length + 1}/4)`);
+                
+                if (activatedLevers.length + 1 === 4) {
+                    dungeonPuzzleSolved = true;
+                    showMessage("✅ ÉNIGME RÉSOLUE ! Le donjon principal est maintenant accessible !");
+                    
+                    // Effet visuel de réussite
+                    const successLight = new THREE.PointLight(0x00FF00, 5, 30);
+                    successLight.position.copy(player.position);
+                    scene.add(successLight);
+                    setTimeout(() => scene.remove(successLight), 2000);
+                }
             } else {
-                showMessage(`Levier ${lever.userData.order} activé !`);
+                showMessage(`❌ Mauvais ordre ! Activez d'abord le levier ${expectedOrder}. Ordre: Rouge(1), Vert(2), Bleu(3), Jaune(4)`);
+                
+                // Réinitialiser tous les leviers
+                items.forEach(item => {
+                    if (item.userData.type === 'puzzle_lever') {
+                        item.userData.activated = false;
+                        item.rotation.x = 0;
+                        if (item.userData.order === 1) item.material.color.setHex(0xFF0000);
+                        if (item.userData.order === 2) item.material.color.setHex(0x00FF00);
+                        if (item.userData.order === 3) item.material.color.setHex(0x0000FF);
+                        if (item.userData.order === 4) item.material.color.setHex(0xFFFF00);
+                    }
+                });
             }
         }
 
         function exitBuilding() {
-            // Nettoyer les objets d'intérieur
-            const interiorObjects = scene.children.filter(obj => obj.userData.type === 'interior');
-            interiorObjects.forEach(obj => scene.remove(obj));
+            // Transition fade out
+            const fadeOverlay = document.createElement('div');
+            fadeOverlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:999;opacity:0;transition:opacity 0.3s;pointer-events:none;';
+            document.body.appendChild(fadeOverlay);
+            
+            setTimeout(() => fadeOverlay.style.opacity = '1', 10);
 
-            // Repositionner le joueur à l'extérieur
-            player.position.set(
-                currentBuilding.position.x,
-                currentBuilding.position.y + 2,
-                currentBuilding.position.z + 8
-            );
+            setTimeout(() => {
+                // Nettoyer intérieur
+                const interiorObjects = scene.children.filter(obj => obj.userData.type === 'interior');
+                interiorObjects.forEach(obj => scene.remove(obj));
 
-            // Restaurer la vue extérieure
-            indoorMode = false;
-            currentBuilding = null;
-            showMessage("Vous êtes sorti");
+                // Repositionner joueur
+                player.position.set(
+                    currentBuilding.position.x,
+                    currentBuilding.position.y + 2,
+                    currentBuilding.position.z + 8
+                );
+
+                // Restaurer monde extérieur
+                enemies.forEach(e => e.visible = true);
+                animals.forEach(a => a.visible = true);
+                trees.forEach(t => t.visible = true);
+                buildings.forEach(b => b.visible = true);
+                chests.forEach(c => c.visible = true);
+                npcs.forEach(n => n.visible = true);
+                if (world.terrain) world.terrain.visible = true;
+                if (world.sky) world.sky.visible = true;
+                if (particleSystem) particleSystem.visible = true;
+
+                indoorMode = false;
+                currentBuilding = null;
+                
+                // Masquer le bouton d'entrée
+                const btnEnter = document.getElementById('btnEnter');
+                if (btnEnter) btnEnter.style.display = 'none';
+                
+                // Fade in
+                setTimeout(() => {
+                    fadeOverlay.style.opacity = '0';
+                    setTimeout(() => document.body.removeChild(fadeOverlay), 300);
+                    showMessage("Vous êtes sorti");
+                }, 100);
+            }, 300);
         }
 
         function performAction() {
@@ -1901,17 +2761,25 @@
         }
 
         function createDamageEffect(position) {
-            const particleGeometry = new THREE.SphereGeometry(0.1, 4, 4);
-            const particleMaterial = new THREE.MeshBasicMaterial({ color: 0xFF0000 });
-
-            for (let i = 0; i < 5; i++) {
+            // Particules de sang/dégâts
+            const particleGeometry = new THREE.SphereGeometry(0.15, 6, 6);
+            
+            for (let i = 0; i < 8; i++) {
+                const particleMaterial = new THREE.MeshStandardMaterial({ 
+                    color: 0xFF0000,
+                    emissive: 0xFF0000,
+                    emissiveIntensity: 0.5,
+                    transparent: true,
+                    opacity: 0.8
+                });
                 const particle = new THREE.Mesh(particleGeometry, particleMaterial);
                 particle.position.copy(position);
                 particle.velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.2,
-                    Math.random() * 0.3,
-                    (Math.random() - 0.5) * 0.2
+                    (Math.random() - 0.5) * 0.3,
+                    Math.random() * 0.4,
+                    (Math.random() - 0.5) * 0.3
                 );
+                particle.castShadow = true;
                 scene.add(particle);
                 particles.push(particle);
 
@@ -1920,6 +2788,36 @@
                     particles = particles.filter(p => p !== particle);
                 }, 1000);
             }
+
+            // Flash lumineux
+            const flashLight = new THREE.PointLight(0xFF0000, 5, 10);
+            flashLight.position.copy(position);
+            scene.add(flashLight);
+            setTimeout(() => scene.remove(flashLight), 100);
+
+            // Onde de choc
+            const shockGeometry = new THREE.RingGeometry(0.5, 1, 32);
+            const shockMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xFFFF00,
+                transparent: true,
+                opacity: 0.6,
+                side: THREE.DoubleSide
+            });
+            const shock = new THREE.Mesh(shockGeometry, shockMaterial);
+            shock.position.copy(position);
+            shock.rotation.x = -Math.PI / 2;
+            scene.add(shock);
+            
+            let scale = 1;
+            const shockInterval = setInterval(() => {
+                scale += 0.3;
+                shock.scale.set(scale, scale, 1);
+                shock.material.opacity -= 0.1;
+                if (shock.material.opacity <= 0) {
+                    scene.remove(shock);
+                    clearInterval(shockInterval);
+                }
+            }, 50);
         }
 
         function showMessage(text) {
@@ -2083,7 +2981,120 @@
 
             velocity.y -= 0.01;
 
+            // Sauvegarder la position avant déplacement pour collision
+            const oldPosition = player.position.clone();
             player.position.add(velocity);
+
+            // Vérifier les collisions
+            let collision = false;
+
+            if (indoorMode && currentBuilding) {
+                // Collisions dans les donjons et bâtiments
+                const interior = currentBuilding.userData.interior;
+                
+                if (currentBuilding.userData.type === 'dungeon_door') {
+                    // Limites du donjon - Salle 1
+                    if (player.position.z < interior.z + 2) {
+                        player.position.z = interior.z + 2;
+                        collision = true;
+                    }
+                    if (player.position.z > interior.z + 18 && player.position.z < interior.z + 22) {
+                        if (player.position.x < interior.x - 14 || player.position.x > interior.x + 14) {
+                            player.position.x = oldPosition.x;
+                            collision = true;
+                        }
+                    }
+                    
+                    // Couloir 1
+                    if (player.position.z > interior.z + 20 && player.position.z < interior.z + 35) {
+                        if (player.position.x < interior.x - 3 || player.position.x > interior.x + 3) {
+                            player.position.x = oldPosition.x;
+                            collision = true;
+                        }
+                    }
+                    
+                    // Salle 2
+                    if (player.position.z > interior.z + 35 && player.position.z < interior.z + 55) {
+                        if (player.position.x < interior.x - 11 || player.position.x > interior.x + 11) {
+                            player.position.x = oldPosition.x;
+                            collision = true;
+                        }
+                    }
+                    
+                    // Couloir 2
+                    if (player.position.z > interior.z + 55 && player.position.z < interior.z + 70) {
+                        if (player.position.x < interior.x - 3 || player.position.x > interior.x + 3) {
+                            player.position.x = oldPosition.x;
+                            collision = true;
+                        }
+                    }
+                    
+                    // Salle du boss
+                    if (player.position.z > interior.z + 70 && player.position.z < interior.z + 98) {
+                        if (player.position.x < interior.x - 16 || player.position.x > interior.x + 16) {
+                            player.position.x = oldPosition.x;
+                            collision = true;
+                        }
+                    }
+                    
+                    // Limite arrière
+                    if (player.position.z > interior.z + 98) {
+                        player.position.z = interior.z + 98;
+                        collision = true;
+                    }
+                } else {
+                    // Collisions pour maisons et autres bâtiments
+                    const roomSize = currentBuilding.userData.type === 'tavern' ? 14 : 
+                                    currentBuilding.userData.type === 'cave' ? 12 : 10;
+                    const halfSize = roomSize / 2 - 0.5;
+                    
+                    if (player.position.x < interior.x - halfSize) {
+                        player.position.x = interior.x - halfSize;
+                        collision = true;
+                    }
+                    if (player.position.x > interior.x + halfSize) {
+                        player.position.x = interior.x + halfSize;
+                        collision = true;
+                    }
+                    if (player.position.z < interior.z - halfSize) {
+                        player.position.z = interior.z - halfSize;
+                        collision = true;
+                    }
+                    if (player.position.z > interior.z + halfSize) {
+                        player.position.z = interior.z + halfSize;
+                        collision = true;
+                    }
+                }
+            }
+
+            // Collision avec les bâtiments à l'extérieur
+            if (!indoorMode) {
+                buildings.forEach(building => {
+                    const bx = building.position.x;
+                    const bz = building.position.z;
+                    const size = building.userData.type === 'dungeon_door' ? 6 : 4;
+                    
+                    if (Math.abs(player.position.x - bx) < size && 
+                        Math.abs(player.position.z - bz) < size) {
+                        player.position.x = oldPosition.x;
+                        player.position.z = oldPosition.z;
+                        collision = true;
+                    }
+                });
+                
+                // Collision avec les arbres
+                trees.forEach(tree => {
+                    const distance = Math.sqrt(
+                        Math.pow(player.position.x - tree.position.x, 2) + 
+                        Math.pow(player.position.z - tree.position.z, 2)
+                    );
+                    if (distance < 1.5) {
+                        player.position.x = oldPosition.x;
+                        player.position.z = oldPosition.z;
+                        collision = true;
+                    }
+                });
+            }
 
             if (player.position.y <= 2) {
                 player.position.y = 2;
@@ -2169,17 +3180,32 @@
                 }
             }
 
-            // Vérifier la proximité des portes pour téléportation automatique
+            // Vérifier la proximité des portes
             if (!indoorMode) {
                 checkDoorProximity();
+                
+                // Entrée dans les bâtiments avec touche E
+                if (keys['e']) {
+                    const playerPos = player.position.clone();
+                    buildings.forEach(building => {
+                        if (building.userData.hasInterior) {
+                            const distance = playerPos.distanceTo(building.position);
+                            if (distance < 8) {
+                                teleportToInterior(building);
+                                keys['e'] = false;
+                            }
+                        }
+                    });
+                }
+            } else if (keys['e']) {
+                // Si on est à l'intérieur, E permet de sortir
+                exitBuilding();
+                keys['e'] = false;
             }
 
-            if (keys['e']) {
-                if (indoorMode && currentBuilding) {
-                    exitBuilding();
-                } else {
-                    checkInteractions();
-                }
+            // Interactions avec objets (ramasser épée, activer leviers, etc.)
+            if (keys['e'] && !indoorMode) {
+                checkInteractions();
                 keys['e'] = false;
             }
         }
@@ -2235,6 +3261,15 @@
 
                     // Animation de rebondissement quand inactif
                     enemy.position.y = 1 + Math.sin(Date.now() * 0.003 + enemy.position.x) * 0.2;
+                }
+
+                // Animation de l'aura du boss
+                const bossAura = enemy.getObjectByName('bossAura');
+                if (bossAura) {
+                    bossAura.rotation.z += 0.02;
+                    bossAura.material.opacity = 0.3 + Math.sin(Date.now() * 0.003) * 0.2;
+                    const scale = 1 + Math.sin(Date.now() * 0.002) * 0.1;
+                    bossAura.scale.set(scale, scale, 1);
                 }
             });
         }
@@ -2293,27 +3328,155 @@
         function updateDayNight() {
             gameTime += 10;
             const hour = Math.floor(gameTime / 1000) % 24;
+            const minute = (gameTime / 1000) % 1;
 
-            const sky = scene.children.find(child => child.geometry instanceof THREE.SphereGeometry);
+            const sky = world.sky;
             const directionalLight = scene.children.find(child => child instanceof THREE.DirectionalLight);
+            const ambientLight = scene.children.find(child => child instanceof THREE.AmbientLight);
 
-            if (sky && directionalLight) {
-                if (hour >= 6 && hour <= 20) {
-                    sky.material.color.setHex(0x87CEEB);
-                    directionalLight.intensity = 1;
-                } else {
-                    sky.material.color.setHex(0x0a0a2e);
-                    directionalLight.intensity = 0.3;
+            if (sky && directionalLight && ambientLight) {
+                let topColor, bottomColor, lightIntensity, ambientIntensity;
+
+                // Aube (5-7h)
+                if (hour >= 5 && hour < 7) {
+                    const t = (hour - 5 + minute) / 2;
+                    topColor = new THREE.Color().lerpColors(
+                        new THREE.Color(0x000033),
+                        new THREE.Color(0xFF6B35),
+                        t
+                    );
+                    bottomColor = new THREE.Color().lerpColors(
+                        new THREE.Color(0x001144),
+                        new THREE.Color(0xFFD700),
+                        t
+                    );
+                    lightIntensity = 0.3 + t * 1.2;
+                    ambientIntensity = 0.2 + t * 0.3;
+                }
+                // Jour (7-17h)
+                else if (hour >= 7 && hour < 17) {
+                    topColor = new THREE.Color(0x0077FF);
+                    bottomColor = new THREE.Color(0xFFFFFF);
+                    lightIntensity = 1.5;
+                    ambientIntensity = 0.5;
+                }
+                // Crépuscule (17-19h)
+                else if (hour >= 17 && hour < 19) {
+                    const t = (hour - 17 + minute) / 2;
+                    topColor = new THREE.Color().lerpColors(
+                        new THREE.Color(0x0077FF),
+                        new THREE.Color(0xFF6B35),
+                        t
+                    );
+                    bottomColor = new THREE.Color().lerpColors(
+                        new THREE.Color(0xFFFFFF),
+                        new THREE.Color(0xFF4500),
+                        t
+                    );
+                    lightIntensity = 1.5 - t * 1.2;
+                    ambientIntensity = 0.5 - t * 0.3;
+                }
+                // Nuit (19-5h)
+                else {
+                    topColor = new THREE.Color(0x000033);
+                    bottomColor = new THREE.Color(0x001144);
+                    lightIntensity = 0.3;
+                    ambientIntensity = 0.2;
+                    
+                    // Étoiles la nuit
+                    if (!scene.getObjectByName('stars')) {
+                        createStars();
+                    }
+                }
+
+                // Application douce des changements
+                if (sky.material.uniforms) {
+                    sky.material.uniforms.topColor.value.lerp(topColor, 0.01);
+                    sky.material.uniforms.bottomColor.value.lerp(bottomColor, 0.01);
+                }
+                directionalLight.intensity += (lightIntensity - directionalLight.intensity) * 0.01;
+                ambientLight.intensity += (ambientIntensity - ambientLight.intensity) * 0.01;
+
+                // Couleur du brouillard suit le ciel
+                if (scene.fog) {
+                    const fogColor = new THREE.Color().lerpColors(bottomColor, topColor, 0.5);
+                    scene.fog.color.lerp(fogColor, 0.01);
                 }
             }
         }
 
+        function createStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 1000;
+            const positions = new Float32Array(starCount * 3);
+            
+            for (let i = 0; i < starCount * 3; i += 3) {
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                const radius = 450;
+                
+                positions[i] = radius * Math.sin(phi) * Math.cos(theta);
+                positions[i + 1] = radius * Math.cos(phi);
+                positions[i + 2] = radius * Math.sin(phi) * Math.sin(theta);
+            }
+            
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            const starMaterial = new THREE.PointsMaterial({
+                color: 0xFFFFFF,
+                size: 2,
+                transparent: true,
+                opacity: 0.8
+            });
+            
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            stars.name = 'stars';
+            scene.add(stars);
+        }
+
         function updateParticles() {
-            particles.forEach(particle => {
+            particles.forEach((particle, index) => {
                 if (particle.velocity) {
                     particle.position.add(particle.velocity);
                     particle.velocity.y -= 0.01;
                 }
+                
+                // Animation de la fumée
+                if (particle.userData.type === 'smoke') {
+                    particle.position.add(particle.userData.velocity);
+                    particle.userData.lifetime++;
+                    particle.material.opacity = Math.max(0, 0.5 - particle.userData.lifetime * 0.01);
+                    particle.scale.set(1 + particle.userData.lifetime * 0.02, 1 + particle.userData.lifetime * 0.02, 1 + particle.userData.lifetime * 0.02);
+                    
+                    if (particle.userData.lifetime > 50) {
+                        scene.remove(particle);
+                        particles.splice(index, 1);
+                    }
+                }
+            });
+            
+            // Animation des particules ambiantes
+            if (particleSystem) {
+                const positions = particleSystem.geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    positions[i + 1] += Math.sin(Date.now() * 0.001 + i) * 0.01;
+                    positions[i] += Math.cos(Date.now() * 0.001 + i) * 0.005;
+                    
+                    if (positions[i + 1] > 60) positions[i + 1] = 5;
+                }
+                particleSystem.geometry.attributes.position.needsUpdate = true;
+                particleSystem.rotation.y += 0.0005;
+            }
+        }
+
+        function updateTreeWind() {
+            const windTime = Date.now() * 0.001;
+            trees.forEach(tree => {
+                const windPhase = tree.userData.windPhase || 0;
+                const leaves = tree.children.filter(child => child.name === 'leaves');
+                leaves.forEach(leaf => {
+                    leaf.rotation.z = Math.sin(windTime + windPhase) * 0.05;
+                    leaf.rotation.x = Math.cos(windTime * 0.7 + windPhase) * 0.03;
+                });
             });
         }
 
@@ -2323,8 +3486,11 @@
             touchKeys = {};
         }
 
+        let frameCount = 0;
+
         function animate() {
             requestAnimationFrame(animate);
+            frameCount++;
 
             if (player) {
                 handleMovement();
@@ -2334,8 +3500,20 @@
                 updateHunger();
                 updateDayNight();
                 updateParticles();
+                updateTreeWind();
                 updateUI();
-                updateMinimap();
+                
+                // Minimap mise à jour toutes les 10 frames pour optimisation
+                if (frameCount % 10 === 0) {
+                    updateMinimap();
+                }
+
+                // Animation de l'aura du joueur
+                const playerAura = player.getObjectByName('playerAura');
+                if (playerAura) {
+                    playerAura.rotation.z += 0.01;
+                    playerAura.material.opacity = 0.2 + Math.sin(Date.now() * 0.002) * 0.15;
+                }
             }
 
             renderer.render(scene, camera);
