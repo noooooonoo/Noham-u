@@ -1402,9 +1402,11 @@
         }
 
         function setupTouchControls() {
+            // Détection améliorée pour mobiles et tablettes
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
-            if (isMobile) {
+            if (isMobile || isTouchDevice) {
                 document.getElementById('touchControls').style.display = 'block';
             }
 
