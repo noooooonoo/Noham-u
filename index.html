@@ -1,393 +1,626 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="RPG 3D - Les Terres d'Aventure - Un jeu de rôle en 3D avec exploration, combats, quêtes et donjons. Sauvez le village des monstres !">
+    <meta name="keywords" content="RPG, 3D, jeu, aventure, quêtes, combats, exploration">
+    <meta name="author" content="RPG 3D Team">
+    <meta name="theme-color" content="#FFD700">
+    
+    <meta property="og:title" content="RPG 3D - Les Terres d'Aventure">
+    <meta property="og:description" content="Un jeu de rôle en 3D épique avec exploration, combats et quêtes. Sauvez le village !">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="/preview.png">
+    
     <title>RPG 3D - Terres d'Aventure</title>
+    
+    <link rel="preconnect" href="https://cdnjs.cloudflare.com">
     <style>
-        .touch-btn {
-            width: 48px;
-            height: 48px;
-            background: rgba(50,50,50,0.8);
-            color: #FFD700;
-            font-size: 30px;
-            border: 2px solid #FFD700;
-            border-radius: 16px;
-            margin: 3px;
-            cursor: pointer;
-            touch-action: manipulation;
-        }
-        .touch-btn:active {
-            background: #FFD700;
-            color: #333;
-        }
-        .cinematic {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: linear-gradient(135deg, rgba(10,10,30,0.97), rgba(40,20,60,0.97));
-            color: #FFD700;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.8rem;
-            z-index: 100;
-            text-align: center;
-            padding: 20px;
-        }
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+:root {
+    --color-gold: #FFD700;
+    --color-dark-bg: rgba(0, 0, 0, 0.8);
+    --color-medium-bg: rgba(0, 0, 0, 0.7);
+    --color-light-bg: rgba(50, 50, 50, 0.8);
+    --color-red: #ff0000;
+    --color-red-light: #ff6b6b;
+    --color-brown: #8B4513;
+    --color-brown-light: #D2691E;
+    --color-orange: #FFA500;
+    --color-purple: #9370DB;
+    --color-blue: #4169E1;
+    --color-cyan: #00CED1;
+    --color-white: white;
+    --color-black: #000;
+    --color-dark-gray: #666;
+    --color-green: #00ff00;
+    
+    --border-radius-sm: 5px;
+    --border-radius-md: 10px;
+    --border-radius-lg: 15px;
+    --border-radius-xl: 16px;
+    
+    --spacing-xs: 3px;
+    --spacing-sm: 10px;
+    --spacing-md: 15px;
+    --spacing-lg: 20px;
+    --spacing-xl: 40px;
+    
+    --bar-width: 250px;
+    --bar-height: 30px;
+    
+    --transition-normal: 0.3s;
+    --transition-fast: 0.2s;
+}
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            background: #000;
-            color: white;
-        }
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
 
-        #gameCanvas {
-            display: block;
-            cursor: crosshair;
-        }
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    background: var(--color-black);
+    color: var(--color-white);
+}
 
-        #ui {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            user-select: none;
-        }
+#gameCanvas {
+    display: block;
+    cursor: crosshair;
+    will-change: transform;
+}
 
-        .health-bar {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            width: 250px;
-            height: 30px;
-            background: rgba(0,0,0,0.7);
-            border: 2px solid #FFD700;
-            border-radius: 15px;
-            overflow: hidden;
-        }
+#ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    user-select: none;
+}
 
-        .health-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #ff0000, #ff6b6b);
-            transition: width 0.3s;
-            box-shadow: 0 0 20px rgba(255,0,0,0.5);
-        }
+.touch-btn {
+    width: 48px;
+    height: 48px;
+    background: var(--color-light-bg);
+    color: var(--color-gold);
+    font-size: 30px;
+    border: 2px solid var(--color-gold);
+    border-radius: var(--border-radius-xl);
+    margin: var(--spacing-xs);
+    cursor: pointer;
+    touch-action: manipulation;
+    transition: all var(--transition-fast);
+}
 
-        .hunger-bar {
-            position: absolute;
-            top: 60px;
-            left: 20px;
-            width: 250px;
-            height: 30px;
-            background: rgba(0,0,0,0.7);
-            border: 2px solid #8B4513;
-            border-radius: 15px;
-            overflow: hidden;
-        }
+.touch-btn:active {
+    background: var(--color-gold);
+    color: #333;
+}
 
-        .hunger-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #8B4513, #D2691E);
-            transition: width 0.3s;
-            box-shadow: 0 0 20px rgba(139,69,19,0.5);
-        }
+.cinematic {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(10,10,30,0.97), rgba(40,20,60,0.97));
+    color: var(--color-gold);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    z-index: 100;
+    text-align: center;
+    padding: var(--spacing-lg);
+}
 
-        .experience-bar {
-            position: absolute;
-            top: 100px;
-            left: 20px;
-            width: 250px;
-            height: 30px;
-            background: rgba(0,0,0,0.7);
-            border: 2px solid #FFD700;
-            border-radius: 15px;
-            overflow: hidden;
-        }
+.health-bar,
+.hunger-bar,
+.experience-bar {
+    position: absolute;
+    left: var(--spacing-lg);
+    width: var(--bar-width);
+    height: var(--bar-height);
+    background: var(--color-medium-bg);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+}
 
-        .experience-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #FFD700, #FFA500);
-            transition: width 0.3s;
-            box-shadow: 0 0 20px rgba(255,215,0,0.5);
-        }
+.health-bar {
+    top: var(--spacing-lg);
+    border: 2px solid var(--color-gold);
+}
 
-        .stats {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px;
-            border-radius: 10px;
-            border: 2px solid #FFD700;
-            font-size: 14px;
-        }
+.hunger-bar {
+    top: 60px;
+    border: 2px solid var(--color-brown);
+}
 
-        .inventory {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-            background: rgba(0,0,0,0.8);
-            padding: 10px;
-            border-radius: 10px;
-            border: 2px solid #FFD700;
-            pointer-events: all;
-        }
+.experience-bar {
+    top: 100px;
+    border: 2px solid var(--color-gold);
+}
 
-        .inventory-slot {
-            width: 60px;
-            height: 60px;
-            background: rgba(255,255,255,0.1);
-            border: 2px solid #666;
-            border-radius: 5px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            position: relative;
-        }
+.health-fill,
+.hunger-fill,
+.experience-fill {
+    height: 100%;
+    width: 0%;
+    transition: width var(--transition-normal);
+}
 
-        .inventory-slot:hover {
-            background: rgba(255,255,255,0.2);
-            border-color: #FFD700;
-            transform: scale(1.1);
-        }
+.health-fill {
+    width: 100%;
+}
 
-        .inventory-slot.selected {
-            border-color: #00ff00;
-            box-shadow: 0 0 20px rgba(0,255,0,0.5);
-        }
+.hunger-fill {
+    width: 100%;
+}
 
-        .item-count {
-            position: absolute;
-            bottom: 2px;
-            right: 2px;
-            background: #FFD700;
-            color: #000;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-size: 12px;
-            font-weight: bold;
-        }
+.health-fill {
+    background: linear-gradient(90deg, var(--color-red), var(--color-red-light));
+    box-shadow: 0 0 20px rgba(255,0,0,0.5);
+}
 
-        .quest-log {
-            position: absolute;
-            top: 150px;
-            left: 20px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px;
-            border-radius: 10px;
-            border: 2px solid #9370DB;
-            max-width: 300px;
-        }
+.hunger-fill {
+    background: linear-gradient(90deg, var(--color-brown), var(--color-brown-light));
+    box-shadow: 0 0 20px rgba(139,69,19,0.5);
+}
 
-        .quest-title {
-            color: #FFD700;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
+.experience-fill {
+    background: linear-gradient(90deg, var(--color-gold), var(--color-orange));
+    box-shadow: 0 0 20px rgba(255,215,0,0.5);
+}
 
-        .controls {
-            position: absolute;
-            bottom: 100px;
-            left: 20px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px;
-            border-radius: 10px;
-            border: 2px solid #4169E1;
-            font-size: 12px;
-        }
+.stats {
+    position: absolute;
+    top: var(--spacing-lg);
+    right: var(--spacing-lg);
+    background: var(--color-dark-bg);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    border: 2px solid var(--color-gold);
+    font-size: 14px;
+}
 
-        .message {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.9);
-            padding: 20px 40px;
-            border-radius: 10px;
-            border: 2px solid #FFD700;
-            font-size: 24px;
-            font-weight: bold;
-            text-align: center;
-            display: none;
-            animation: pulse 2s infinite;
-        }
+.inventory {
+    position: absolute;
+    bottom: var(--spacing-lg);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: var(--spacing-sm);
+    background: var(--color-dark-bg);
+    padding: var(--spacing-sm);
+    border-radius: var(--border-radius-md);
+    border: 2px solid var(--color-gold);
+    pointer-events: all;
+}
 
-        @keyframes pulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.05); }
-        }
+.inventory-slot {
+    width: 60px;
+    height: 60px;
+    background: rgba(255,255,255,0.1);
+    border: 2px solid var(--color-dark-gray);
+    border-radius: var(--border-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    position: relative;
+}
 
-        .minimap {
-            position: absolute;
-            top: 20px;
-            right: 320px;
-            width: 150px;
-            height: 150px;
-            background: rgba(0,0,0,0.8);
-            border: 2px solid #00CED1;
-            border-radius: 10px;
-            overflow: hidden;
-        }
+.inventory-slot:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: var(--color-gold);
+    transform: scale(1.1);
+}
 
-        #minimapCanvas {
-            width: 100%;
-            height: 100%;
-        }
+.inventory-slot.selected {
+    border-color: var(--color-green);
+    box-shadow: 0 0 20px rgba(0,255,0,0.5);
+}
 
-        .dialog-box {
-            position: absolute;
-            bottom: 150px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,30,30,0.95));
-            padding: 20px;
-            border-radius: 10px;
-            border: 2px solid #FFD700;
-            max-width: 600px;
-            display: none;
-            pointer-events: all;
-            animation: slideUp 0.3s ease-out;
-        }
+.item-count {
+    position: absolute;
+    bottom: 2px;
+    right: 2px;
+    background: var(--color-gold);
+    color: var(--color-black);
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: bold;
+}
 
-        @keyframes slideUp {
-            from { transform: translateX(-50%) translateY(20px); opacity: 0; }
-            to { transform: translateX(-50%) translateY(0); opacity: 1; }
-        }
+.quest-log {
+    position: absolute;
+    top: 150px;
+    left: var(--spacing-lg);
+    background: var(--color-dark-bg);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    border: 2px solid var(--color-purple);
+    max-width: 300px;
+}
 
-        .dialog-speaker {
-            color: #FFD700;
-            font-weight: bold;
-            margin-bottom: 10px;
-            font-size: 18px;
-        }
+.quest-title {
+    color: var(--color-gold);
+    font-weight: bold;
+    margin-bottom: var(--spacing-sm);
+}
 
-        .dialog-text {
-            font-size: 16px;
-            line-height: 1.5;
-        }
+.controls {
+    position: absolute;
+    bottom: 100px;
+    left: var(--spacing-lg);
+    background: var(--color-dark-bg);
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-md);
+    border: 2px solid var(--color-blue);
+    font-size: 12px;
+}
 
-        .loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 32px;
-            color: #FFD700;
-            animation: blink 1s infinite;
-        }
+.message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0,0,0,0.9);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-radius: var(--border-radius-md);
+    border: 2px solid var(--color-gold);
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+    display: none;
+    animation: pulse 2s infinite;
+}
 
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.3; }
-        }
+@keyframes pulse {
+    0%, 100% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+.minimap {
+    position: absolute;
+    top: var(--spacing-lg);
+    right: 320px;
+    width: 150px;
+    height: 150px;
+    background: var(--color-dark-bg);
+    border: 2px solid var(--color-cyan);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+}
+
+#minimapCanvas {
+    width: 100%;
+    height: 100%;
+}
+
+.dialog-box {
+    position: absolute;
+    bottom: 150px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: linear-gradient(135deg, rgba(0,0,0,0.95), rgba(30,30,30,0.95));
+    padding: var(--spacing-lg);
+    border-radius: var(--border-radius-md);
+    border: 2px solid var(--color-gold);
+    max-width: 600px;
+    display: none;
+    pointer-events: all;
+    animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+    from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.dialog-speaker {
+    color: var(--color-gold);
+    font-weight: bold;
+    margin-bottom: var(--spacing-sm);
+    font-size: 18px;
+}
+
+.dialog-text {
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 32px;
+    color: var(--color-gold);
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+@media (max-width: 768px) {
+    .controls {
+        font-size: 10px;
+        padding: var(--spacing-sm);
+    }
+    
+    .stats {
+        font-size: 12px;
+        padding: var(--spacing-sm);
+    }
+    
+    .quest-log {
+        font-size: 12px;
+        max-width: 200px;
+    }
+}
+
+.cinematic h1 {
+    font-size: 2.5rem;
+    margin-bottom: 30px;
+}
+
+.cinematic p {
+    margin: 20px 0;
+}
+
+.cinematic .start-btn {
+    margin-top: 40px;
+    width: auto;
+    padding: 15px 30px;
+}
+
+#touchControls {
+    display: none;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    pointer-events: none;
+}
+
+#joystickLeft,
+#joystickRight {
+    position: absolute;
+    bottom: 20px;
+    width: 120px;
+    height: 120px;
+    background: rgba(50, 50, 50, 0.5);
+    border: 3px solid var(--color-gold);
+    border-radius: 50%;
+    pointer-events: all;
+}
+
+#joystickLeft {
+    left: 20px;
+}
+
+#joystickRight {
+    right: 20px;
+}
+
+#joystickKnobLeft,
+#joystickKnobRight {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: var(--color-gold);
+    border-radius: 50%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.touch-actions {
+    position: absolute;
+    bottom: 160px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    pointer-events: all;
+}
+
+.touch-actions .touch-btn {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+}
+
+#btnEnter {
+    background: rgba(100, 50, 200, 0.8);
+    border-color: var(--color-purple);
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .controls {
+        font-size: 10px;
+        padding: var(--spacing-sm);
+    }
+    
+    .stats {
+        font-size: 12px;
+        padding: var(--spacing-sm);
+    }
+    
+    .quest-log {
+        font-size: 12px;
+        max-width: 200px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
     </style>
 </head>
 <body>
-    <div class="loading" id="loading">Chargement du monde...</div>
-    <canvas id="gameCanvas"></canvas>
-    <div id="ui">
-        <div class="health-bar">
-            <div class="health-fill" id="healthFill" style="width: 100%"></div>
-        </div>
-        <div class="hunger-bar">
-            <div class="hunger-fill" id="hungerFill" style="width: 100%"></div>
-        </div>
-        <div class="experience-bar">
-            <div class="experience-fill" id="experienceFill" style="width: 0%"></div>
-        </div>
+    <main role="main">
+        <div class="loading" id="loading" role="status" aria-live="polite">Chargement du monde...</div>
+        <canvas id="gameCanvas" aria-label="Zone de jeu 3D"></canvas>
+        
+        <div id="ui" aria-label="Interface utilisateur">
+            <div class="health-bar" role="meter" aria-label="Points de vie" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+                <div class="health-fill" id="healthFill"></div>
+            </div>
+            <div class="hunger-bar" role="meter" aria-label="Faim" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+                <div class="hunger-fill" id="hungerFill"></div>
+            </div>
+            <div class="experience-bar" role="meter" aria-label="Expérience" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                <div class="experience-fill" id="experienceFill"></div>
+            </div>
 
-        <div class="stats">
-            <div>Niveau: <span id="level">1</span></div>
-            <div>Or: <span id="gold">0</span></div>
-            <div>Position: <span id="position">0, 0</span></div>
-            <div>Temps: <span id="gameTime">Jour</span></div>
-        </div>
+            <aside class="stats" role="complementary" aria-label="Statistiques du joueur">
+                <div>Niveau: <span id="level">1</span></div>
+                <div>Or: <span id="gold">0</span></div>
+                <div>Position: <span id="position">0, 0</span></div>
+                <div>Temps: <span id="gameTime">Jour</span></div>
+            </aside>
 
-        <div class="quest-log">
-            <div class="quest-title">Quête Active:</div>
-            <div id="questText">Trouve l'épée dans la maison de départ</div>
-        </div>
+            <aside class="quest-log" role="complementary" aria-label="Journal de quêtes">
+                <div class="quest-title">Quête Active:</div>
+                <div id="questText" aria-live="polite">Trouve l'épée dans la maison de départ</div>
+            </aside>
 
-        <div class="controls">
-            <div><strong>Contrôles:</strong></div>
-            <div>ZQSD/WASD - Se déplacer</div>
-            <div>Flèches ←→↑↓ - Caméra</div>
-            <div>Clic gauche - Attaquer/Interagir</div>
-            <div>Espace - Sauter</div>
-            <div>E - Ramasser/Parler/Entrer</div>
-            <div>1-5 - Sélectionner objet</div>
-            <div>Q - Accepter quête</div>
-            <div>C - Commerce</div>
-            <div>F - Crafting</div>
-        </div>
+            <aside class="controls" role="complementary" aria-label="Contrôles du jeu">
+                <div><strong>Contrôles:</strong></div>
+                <div>ZQSD/WASD - Se déplacer</div>
+                <div>Flèches ←→↑↓ - Caméra</div>
+                <div>Clic gauche - Attaquer/Interagir</div>
+                <div>Espace - Sauter</div>
+                <div>E - Ramasser/Parler/Entrer</div>
+                <div>1-5 - Sélectionner objet</div>
+                <div>Q - Accepter quête</div>
+                <div>C - Commerce</div>
+                <div>F - Crafting</div>
+            </aside>
 
-        <div class="minimap">
-            <canvas id="minimapCanvas"></canvas>
-        </div>
+            <aside class="minimap" role="complementary" aria-label="Mini-carte">
+                <canvas id="minimapCanvas" aria-label="Carte du monde"></canvas>
+            </aside>
 
-        <div class="inventory">
-            <div class="inventory-slot selected" data-slot="0">❌</div>
-            <div class="inventory-slot" data-slot="1">🍖<span class="item-count">5</span></div>
-            <div class="inventory-slot" data-slot="2">🧪<span class="item-count">3</span></div>
-            <div class="inventory-slot" data-slot="3">🪙<span class="item-count">10</span></div>
-            <div class="inventory-slot" data-slot="4">📜</div>
-        </div>
+            <nav class="inventory" aria-label="Inventaire">
+                <div class="inventory-slot selected" data-slot="0" role="button" aria-label="Slot 1: Vide" tabindex="0">❌</div>
+                <div class="inventory-slot" data-slot="1" role="button" aria-label="Slot 2: Viande, quantité 5" tabindex="0">🍖<span class="item-count" aria-hidden="true">5</span></div>
+                <div class="inventory-slot" data-slot="2" role="button" aria-label="Slot 3: Potion, quantité 3" tabindex="0">🧪<span class="item-count" aria-hidden="true">3</span></div>
+                <div class="inventory-slot" data-slot="3" role="button" aria-label="Slot 4: Pièces, quantité 10" tabindex="0">🪙<span class="item-count" aria-hidden="true">10</span></div>
+                <div class="inventory-slot" data-slot="4" role="button" aria-label="Slot 5: Parchemin" tabindex="0">📜</div>
+            </nav>
 
-        <div class="dialog-box" id="dialogBox">
-            <div class="dialog-speaker" id="dialogSpeaker">Villageois</div>
-            <div class="dialog-text" id="dialogText"></div>
-        </div>
+            <div class="dialog-box" id="dialogBox" role="dialog" aria-labelledby="dialogSpeaker">
+                <div class="dialog-speaker" id="dialogSpeaker">Villageois</div>
+                <div class="dialog-text" id="dialogText" aria-live="polite"></div>
+            </div>
 
-        <div class="message" id="message"></div>
-    </div>
-
-    <div class="cinematic" id="cinematic">
-        <div style="font-size: 2.5rem; margin-bottom: 30px;">🏰 Les Terres d'Aventure 🏰</div>
-        <div style="margin: 20px 0;">Il était une fois…</div>
-        <div style="margin: 20px 0;">Un monde envahi par les monstres…</div>
-        <div style="margin: 20px 0;">Réveillé dans une maison étrange, tu dois trouver ton épée et sauver le village !</div>
-        <button class="touch-btn" style="margin-top:40px; width: auto; padding: 15px 30px;" onclick="endCinematic()">⚔️ Commencer l'Aventure</button>
-    </div>
-
-    <div id="touchControls" style="display:none; position:absolute;bottom:20px;left:0;right:0;z-index:10;pointer-events:none;">
-        <!-- Joystick virtuel gauche pour déplacement -->
-        <div id="joystickLeft" style="position:absolute;bottom:20px;left:20px;width:120px;height:120px;background:rgba(50,50,50,0.5);border:3px solid #FFD700;border-radius:50%;pointer-events:all;">
-            <div id="joystickKnobLeft" style="position:absolute;width:50px;height:50px;background:#FFD700;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);"></div>
+            <div class="message" id="message" role="alert" aria-live="assertive"></div>
         </div>
 
-        <!-- Joystick virtuel droite pour caméra -->
-        <div id="joystickRight" style="position:absolute;bottom:20px;right:20px;width:120px;height:120px;background:rgba(50,50,50,0.5);border:3px solid #FFD700;border-radius:50%;pointer-events:all;">
-            <div id="joystickKnobRight" style="position:absolute;width:50px;height:50px;background:#FFD700;border-radius:50%;top:50%;left:50%;transform:translate(-50%,-50%);"></div>
+        <div class="cinematic" id="cinematic" role="dialog" aria-label="Introduction du jeu">
+            <h1>🏰 Les Terres d'Aventure 🏰</h1>
+            <p>Il était une fois…</p>
+            <p>Un monde envahi par les monstres…</p>
+            <p>Réveillé dans une maison étrange, tu dois trouver ton épée et sauver le village !</p>
+            <button class="touch-btn start-btn" onclick="endCinematic()" aria-label="Commencer l'aventure" tabindex="0">⚔️ Commencer l'Aventure</button>
         </div>
 
-        <!-- Boutons d'action -->
-        <div style="position:absolute;bottom:160px;right:20px;display:flex;flex-direction:column;gap:10px;pointer-events:all;">
-            <button class="touch-btn" id="btnJump" style="width:60px;height:60px;font-size:24px;">⏫</button>
-            <button class="touch-btn" id="btnAction" style="width:60px;height:60px;font-size:24px;">⚔️</button>
-            <button class="touch-btn" id="btnInteract" style="width:60px;height:60px;font-size:24px;">🗨️</button>
-            <button class="touch-btn" id="btnEnter" style="width:60px;height:60px;font-size:24px;background:rgba(100,50,200,0.8);border-color:#9370DB;display:none;">🚪</button>
-        </div>
-    </div>
+        <div id="touchControls" aria-hidden="true">
+            <div id="joystickLeft" aria-label="Joystick de déplacement">
+                <div id="joystickKnobLeft"></div>
+            </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+            <div id="joystickRight" aria-label="Joystick de caméra">
+                <div id="joystickKnobRight"></div>
+            </div>
+
+            <div class="touch-actions">
+                <button class="touch-btn" id="btnJump" aria-label="Sauter">⏫</button>
+                <button class="touch-btn" id="btnAction" aria-label="Attaquer">⚔️</button>
+                <button class="touch-btn" id="btnInteract" aria-label="Interagir">🗨️</button>
+                <button class="touch-btn" id="btnEnter" aria-label="Entrer">🚪</button>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous" integrity="sha512-dLxUelApnYxpLt6K2iomGngnHO83iUvZytA3YjDUCjT0HDOHKXnVYdf3hU4JjM8uEhxf9nD1/ey98U3t2vZ0qQ==" referrerpolicy="no-referrer"></script>
     <script>
-        // Variables globales du jeu
+// Optimisations de performance
+const performance = window.performance || {};
+const requestAnimationFrame = window.requestAnimationFrame ||
+    window.webkitRequestAnimationFrame ||
+    window.mozRequestAnimationFrame ||
+    function(callback) { return setTimeout(callback, 16); };
+
+// Cache pour optimiser les calculs répétés
+const mathCache = {
+    sin: {},
+    cos: {},
+    sqrt: {}
+};
+
+// Throttle function pour limiter les appels coûteux
+function throttle(func, limit) {
+    let inThrottle;
+    return function(...args) {
+        if (!inThrottle) {
+            func.apply(this, args);
+            inThrottle = true;
+            setTimeout(() => inThrottle = false, limit);
+        }
+    };
+}
+
+// Debounce function pour retarder les appels
+function debounce(func, delay) {
+    let timeoutId;
+    return function(...args) {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => func.apply(this, args), delay);
+    };
+}
+
+// Object pool pour réutiliser les objets Three.js
+class ObjectPool {
+    constructor(factory, initialSize = 10) {
+        this.factory = factory;
+        this.pool = [];
+        for (let i = 0; i < initialSize; i++) {
+            this.pool.push(factory());
+        }
+    }
+    
+    get() {
+        return this.pool.length > 0 ? this.pool.pop() : this.factory();
+    }
+    
+    release(obj) {
+        this.pool.push(obj);
+    }
+}
+
+// Cache de vecteurs pour réduire les allocations
+const vectorPool = new ObjectPool(() => new THREE.Vector3(), 50);
+
+// Variables globales du jeu
         let scene, camera, renderer;
         let player, playerMesh;
         let world = {};
@@ -422,7 +655,7 @@
             gold: 0,
             damage: 10,
             defense: 5,
-            speed: 0.22,
+            speed: 0.40,
             jumpPower: 0.35,
             hasSword: false
         };
@@ -569,11 +802,11 @@
                 quest.completed = true;
                 questSystem.completedQuests.push(quest);
                 questSystem.activeQuests = questSystem.activeQuests.filter(q => q.id !== quest.id);
-                
+
                 // Récompenses
                 playerStats.experience += quest.rewards.exp;
                 playerStats.gold += quest.rewards.gold;
-                
+
                 // Niveau up
                 const expNeeded = playerStats.level * 100;
                 if (playerStats.experience >= expNeeded) {
@@ -584,7 +817,7 @@
                     playerStats.damage += 5;
                     showMessage(`🎉 Niveau ${playerStats.level} atteint !`);
                 }
-                
+
                 showMessage(`✅ Quête terminée: ${quest.name}! +${quest.rewards.exp} EXP, +${quest.rewards.gold} Or`);
                 updateQuestUI();
             }
@@ -655,7 +888,7 @@
             // Lumière d'appoint pour un meilleur rendu
             const hemisphereLight = new THREE.HemisphereLight(0x87CEEB, 0x8B4513, 0.7);
             scene.add(hemisphereLight);
-            
+
             // Lumière de remplissage pour réduire les ombres trop dures
             const fillLight = new THREE.DirectionalLight(0xFFFFFF, 0.3);
             fillLight.position.set(-50, 50, -50);
@@ -752,10 +985,10 @@
                     // Convertir coordonnées canvas en coordonnées monde
                     const worldX = (i / 512) * 1000 - 500;
                     const worldZ = (j / 512) * 1000 - 500;
-                    
+
                     const color = getBiomeColor(worldX, worldZ);
                     const noise = Math.random() * 15;
-                    
+
                     ctx.fillStyle = `rgb(${color.r + noise}, ${color.g + noise}, ${color.b + noise})`;
                     ctx.fillRect(i, j, 1, 1);
                 }
@@ -776,10 +1009,10 @@
             for (let i = 0; i < vertices.length; i += 3) {
                 const x = vertices[i];
                 const z = vertices[i + 1];
-                
+
                 // Hauteur selon le biome
                 let height = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 4;
-                
+
                 if (x < -200) {
                     // Désert : plus plat avec dunes
                     height = Math.sin(x * 0.1) * 2 + Math.random() * 0.3;
@@ -793,7 +1026,7 @@
                     // Montagne : très élevé et accidenté
                     height = Math.sin(x * 0.08) * Math.cos(z * 0.08) * 12 + Math.random() * 2;
                 }
-                
+
                 vertices[i + 2] = height;
             }
             terrainGeometry.computeVertexNormals();
@@ -1754,7 +1987,7 @@
                     if (Math.abs(x - 50) > 40 || Math.abs(z - 50) > 40) {
                         const terrainHeight = getTerrainHeight(x, z);
                         let obj;
-                        
+
                         if (x < -200) {
                             obj = createCactus(x, terrainHeight, z);
                         } else if (x > 200) {
@@ -1766,7 +1999,7 @@
                         } else {
                             obj = createTree(x, terrainHeight, z);
                         }
-                        
+
                         if (obj) {
                             chunk.objects.push(obj);
                             obj.visible = false; // Invisible par défaut
@@ -1917,7 +2150,7 @@
 
         function createCactus(x, y, z) {
             const cactus = new THREE.Group();
-            
+
             // Corps principal du cactus
             const bodyGeometry = new THREE.CylinderGeometry(0.6, 0.7, 5, 8);
             const cactusMaterial = new THREE.MeshStandardMaterial({ color: 0x2E8B57 });
@@ -1949,7 +2182,7 @@
 
         function createSnowTree(x, y, z) {
             const tree = new THREE.Group();
-            
+
             // Tronc
             const trunkGeometry = new THREE.CylinderGeometry(0.8, 1, 6, 8);
             const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x4B3621 });
@@ -1985,7 +2218,7 @@
 
         function createDeadTree(x, y, z) {
             const tree = new THREE.Group();
-            
+
             // Tronc mort
             const trunkGeometry = new THREE.CylinderGeometry(0.8, 1.2, 7, 8);
             const deadMaterial = new THREE.MeshStandardMaterial({ color: 0x3D3D3D });
@@ -2020,7 +2253,7 @@
 
         function createRock(x, y, z) {
             const rock = new THREE.Group();
-            
+
             // Rocher principal avec forme irrégulière
             const rockGeometry = new THREE.DodecahedronGeometry(2 + Math.random(), 0);
             const rockMaterial = new THREE.MeshStandardMaterial({ 
@@ -2917,7 +3150,7 @@
                 updateInventoryUI();
                 return true;
             }
-            
+
             // Recette 2: 5 Pièces d'or = 1 Nourriture (en cas d'urgence)
             if (playerStats.gold >= 10 && inventory[1].quantity < 10) {
                 playerStats.gold -= 10;
@@ -2926,7 +3159,7 @@
                 updateInventoryUI();
                 return true;
             }
-            
+
             showMessage("❌ Recettes disponibles:\n2 Nourritures + 1 Potion = Super Potion\n10 Or = 2 Nourritures");
             return false;
         }
@@ -3515,7 +3748,7 @@
             enemies.splice(index, 1);
 
             showMessage(`+${enemy.userData.experience} XP, +${enemy.userData.gold} Or`);
-            
+
             // Mise à jour quêtes
             updateQuestProgress('kill', enemy.userData.enemyType, 1);
             updateQuestProgress('gold', null, enemy.userData.gold);
@@ -3729,7 +3962,7 @@
         function getTerrainHeight(x, z) {
             // Calculer la hauteur du terrain à une position donnée (même formule que la génération)
             let height = Math.sin(x * 0.05) * Math.cos(z * 0.05) * 4;
-            
+
             if (x < -200) {
                 // Désert : plus plat avec dunes
                 height = Math.sin(x * 0.1) * 2;
@@ -3743,14 +3976,14 @@
                 // Montagne : très élevé et accidenté
                 height = Math.sin(x * 0.08) * Math.cos(z * 0.08) * 12;
             }
-            
+
             return height;
         }
 
         function checkBiomeExploration() {
             const x = player.position.x;
             const z = player.position.z;
-            
+
             if (x < -200 && !questSystem.biomesVisited?.desert) {
                 if (!questSystem.biomesVisited) questSystem.biomesVisited = {};
                 questSystem.biomesVisited.desert = true;
@@ -3777,7 +4010,7 @@
         function handleMovement() {
             const moveSpeed = playerStats.speed;
             const direction = new THREE.Vector3();
-            
+
             // Vérifier l'exploration de biomes
             if (!indoorMode) {
                 checkBiomeExploration();
@@ -3925,12 +4158,12 @@
                     const bx = building.position.x;
                     const bz = building.position.z;
                     const by = building.position.y;
-                    
+
                     // Taille de collision ajustée selon le type
                     let sizeX = 5;
                     let sizeZ = 5;
                     let sizeY = 7;
-                    
+
                     if (building.userData.type === 'dungeon_door') {
                         sizeX = 7;
                         sizeZ = 4;
@@ -3997,7 +4230,7 @@
             if (!indoorMode) {
                 const terrainHeight = getTerrainHeight(player.position.x, player.position.z);
                 const groundLevel = terrainHeight + 0.5; // Réduit de 2 à 0.5 pour que le joueur touche le sol
-                
+
                 if (player.position.y <= groundLevel) {
                     player.position.y = groundLevel;
                     velocity.y = 0;
@@ -4007,7 +4240,7 @@
                 // À l'intérieur, sol plat
                 const interior = currentBuilding.userData.interior;
                 const groundLevel = interior.y + 0.5; // Réduit aussi pour l'intérieur
-                
+
                 if (player.position.y <= groundLevel) {
                     player.position.y = groundLevel;
                     velocity.y = 0;
@@ -4044,7 +4277,7 @@
                     rightArm.rotation.z = -Math.sin(walkAnimationTime * 0.3) * 0.15;
                     rightArm.position.y = 1 + Math.abs(Math.sin(walkAnimationTime + Math.PI)) * 0.05;
                 }
-                
+
                 // Mouvement des jambes plus prononcé
                 if (leftLeg) {
                     leftLeg.rotation.x = Math.sin(walkAnimationTime + Math.PI) * 0.6;
@@ -4068,7 +4301,7 @@
                     head.rotation.x = Math.sin(walkAnimationTime * 0.4) * 0.06;
                     head.position.y = 2.3 + Math.abs(Math.sin(walkAnimationTime * 2)) * 0.03;
                 }
-                
+
                 // Animation de la cape qui suit le mouvement
                 if (cape) {
                     cape.rotation.x = 0.2 + Math.sin(walkAnimationTime * 0.7) * 0.15;
@@ -4109,7 +4342,7 @@
                     head.rotation.y = Math.sin(idleTime * 0.25) * 0.08;
                     head.position.y = 2.3 + Math.abs(Math.sin(idleTime * 1.5)) * 0.015;
                 }
-                
+
                 // Cape qui bouge doucement même à l'arrêt
                 if (cape) {
                     cape.rotation.x = 0.2 + Math.sin(idleTime * 0.8) * 0.05;
@@ -4144,7 +4377,7 @@
                         if (building.userData.hasInterior && !enteredBuilding) {
                             const distance = playerPos.distanceTo(building.position);
                             const maxDistance = building.userData.type === 'dungeon_door' ? 12 : 10;
-                            
+
                             if (distance < maxDistance) {
                                 // Vérifier si c'est le donjon verrouillé
                                 if (building.userData.type === 'dungeon_door' && 
@@ -4160,7 +4393,7 @@
                             }
                         }
                     });
-                    
+
                     // Si on n'est pas entré dans un bâtiment, faire les autres interactions
                     if (!enteredBuilding) {
                         checkInteractions();
@@ -4186,7 +4419,7 @@
                 const interior = currentBuilding.userData.interior;
                 const roomSize = currentBuilding.userData.type === 'tavern' ? 14 : 
                                 currentBuilding.userData.type === 'cave' ? 12 : 10;
-                
+
                 // Position FIXE de la caméra (définie une seule fois lors de l'entrée)
                 if (!currentBuilding.userData.cameraPositionSet) {
                     camera.position.set(
@@ -4196,7 +4429,7 @@
                     );
                     currentBuilding.userData.cameraPositionSet = true;
                 }
-                
+
                 // La caméra reste IMMOBILE mais REGARDE le personnage
                 const lookAtTarget = new THREE.Vector3(
                     player.position.x, 
