@@ -1,198 +1,916 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🏋️ Mon Coach Sportif</title>
+import React, { useEffect, useRef, useState } from 'react';
+import * as THREE from 'three';
 
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;800&display=swap" rel="stylesheet">
-  <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js"></script>
+const HelloNeighbor3D = () => {
+  const mountRef = useRef(null);
 
-  <style>
-    body {
-      margin: 0;
-      font-family: 'Poppins', sans-serif;
-      background: radial-gradient(circle at top left, #0b0f19 0%, #1b1f3b 100%);
-      color: white;
-      min-height: 100vh;
-      overflow-x: hidden;
+  // game state
+  const [gameState, setGameState] = useState('playing');
+  const [keysFound, setKeysFound] = useState(0);
+  const [message, setMessage] = useState('Find 3 keys to unlock the basement!');
+
+  // input refs (so both JSX handlers and the effect can read/write the same object)
+  const keysRef = useRef({
+    w: false,
+    a: false,
+    s: false,
+    d: false,
+    arrowup: false,
+    arrowleft: false,
+    arrowdown: false,
+    arrowright: false,
+    joystickX: 0, // -1..1
+    joystickY: 0, // -1..1 (forward = -1 because z decreases)
+    sprint: false
+  });
+
+  // joystick UI state (for rendering)
+  const joystickRef = useRef({
+    active: false,
+    identifier: null,
+    originX: 0,
+    originY: 0,
+    stickX: 0,
+    stickY: 0
+  });
+
+  // to force re-mount of effect when resetting, use keysFound as dependency (we already do)
+  useEffect(() => {
+    if (!mountRef.current) return;
+
+    // local references (ease)
+    const input = keysRef.current;
+    const joystickState = joystickRef.current;
+
+    // === THREE setup ===
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87ceeb);
+    scene.fog = new THREE.Fog(0x87ceeb, 0, 150);
+
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    mountRef.current.appendChild(renderer.domElement);
+
+    // lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+
+    const sunLight = new THREE.DirectionalLight(0xffffcc, 1.2);
+    sunLight.position.set(30, 50, 40);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.width = 2048;
+    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.camera.left = -50;
+    sunLight.shadow.camera.right = 50;
+    sunLight.shadow.camera.top = 50;
+    sunLight.shadow.camera.bottom = -50;
+    scene.add(sunLight);
+
+    // ground
+    const groundGeo = new THREE.PlaneGeometry(200, 200);
+    const groundMat = new THREE.MeshLambertMaterial({ color: 0x3a7d44 });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    for (let i = 0; i < 20; i++) {
+      const patchGeo = new THREE.CircleGeometry(2, 8);
+      const patchMat = new THREE.MeshLambertMaterial({ color: 0x2d6b37 });
+      const patch = new THREE.Mesh(patchGeo, patchMat);
+      patch.rotation.x = -Math.PI / 2;
+      patch.position.set(Math.random() * 80 - 40, 0.01, Math.random() * 80 - 40);
+      patch.receiveShadow = true;
+      scene.add(patch);
     }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 20px 50px;
-      background: rgba(255,255,255,0.05);
-      backdrop-filter: blur(10px);
-    }
-    header h1 { color: #00f2fe; font-weight: 800; }
-    #loginBtn {
-      border: none; background: linear-gradient(90deg, #4facfe, #00f2fe);
-      padding: 10px 25px; border-radius: 25px;
-      color: white; cursor: pointer; font-weight: 600;
-    }
-    .main {
-      padding: 50px;
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 30px;
-    }
-    .card {
-      background: rgba(255,255,255,0.08); border-radius: 20px; overflow: hidden;
-      transition: 0.3s; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-    }
-    .card:hover { transform: translateY(-8px) scale(1.02); }
-    .card img { width: 100%; height: 180px; object-fit: cover; }
-    .card-content { padding: 20px; }
-    .card-content h3 { color: #00f2fe; }
-    .btn { background: #ff4b2b; border: none; padding: 6px 14px; border-radius: 20px;
-           color: white; cursor: pointer; font-size: 0.9em; margin-top: 10px; display: none; }
-    .coach .btn { display: inline-block; }
-    footer { text-align: center; opacity: 0.6; padding: 20px; }
 
-    .add-btn {
-      position: fixed; bottom: 40px; right: 40px;
-      background: linear-gradient(90deg, #00f2fe, #4facfe);
-      color: white; border: none; padding: 15px 20px;
-      border-radius: 50%; font-size: 1.5em; cursor: pointer; display: none;
-    }
-    .coach .add-btn { display: block; }
+    // house
+    const houseGroup = new THREE.Group();
 
-    /* modal */
-    .modal {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
-      display: flex; align-items: center; justify-content: center;
-      visibility: hidden; opacity: 0; transition: 0.3s;
-    }
-    .modal.show { visibility: visible; opacity: 1; }
-    .modal-content {
-      background: rgba(255,255,255,0.1); border-radius: 15px;
-      padding: 25px; width: 90%; max-width: 400px; text-align: center;
-    }
-    .modal-content input {
-      width: 100%; padding: 10px; margin: 10px 0;
-      border-radius: 10px; border: none; background: rgba(255,255,255,0.15);
-      color: white;
-    }
-    .modal-content button {
-      margin-top: 10px; border: none; background: linear-gradient(90deg,#4facfe,#00f2fe);
-      color: white; padding: 10px 20px; border-radius: 20px; cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>🏋️ Mon Coach Sportif</h1>
-    <button id="loginBtn">Connexion Google</button>
-  </header>
+    const houseGeo = new THREE.BoxGeometry(25, 12, 22);
+    const houseMat = new THREE.MeshLambertMaterial({ color: 0xe6c896 });
+    const house = new THREE.Mesh(houseGeo, houseMat);
+    house.position.y = 6;
+    house.castShadow = true;
+    house.receiveShadow = true;
+    houseGroup.add(house);
 
-  <section class="main" id="workouts"></section>
-  <button class="add-btn" id="addBtn">+</button>
-  <footer>© 2025 Mon Coach Sportif</footer>
+    const roofGeo = new THREE.ConeGeometry(18, 10, 4);
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0xb8503c });
+    const roof = new THREE.Mesh(roofGeo, roofMat);
+    roof.position.y = 17;
+    roof.rotation.y = Math.PI / 4;
+    roof.castShadow = true;
+    houseGroup.add(roof);
 
-  <div class="modal" id="workoutModal">
-    <div class="modal-content">
-      <h2>Nouvel entraînement</h2>
-      <input type="text" id="titleInput" placeholder="Nom de la séance">
-      <input type="text" id="durationInput" placeholder="Durée (ex: 30 min)">
-      <input type="text" id="imageInput" placeholder="Lien image (Unsplash)">
-      <button id="saveBtn">Enregistrer</button>
-    </div>
-  </div>
+    const chimneyGeo = new THREE.BoxGeometry(2, 6, 2);
+    const chimneyMat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+    const chimney = new THREE.Mesh(chimneyGeo, chimneyMat);
+    chimney.position.set(6, 18, -6);
+    chimney.castShadow = true;
+    houseGroup.add(chimney);
 
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-auth.js";
-    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.1/firebase-firestore.js";
+    const windowGeo = new THREE.BoxGeometry(2.5, 3, 0.3);
+    const windowMat = new THREE.MeshLambertMaterial({ color: 0x1a1a2e });
 
-    // ✅ Mets ici ton firebaseConfig
-    const firebaseConfig = {
-      apiKey: "TA_CLE_API",
-      authDomain: "TON_DOMAINE.firebaseapp.com",
-      projectId: "TON_PROJECT_ID",
-      storageBucket: "TON_PROJECT_ID.appspot.com",
-      messagingSenderId: "xxxx",
-      appId: "1:xxxx:web:xxxx"
-    };
+    const windowPositions = [
+      { x: -8, y: 8, z: 11.2 },
+      { x: 0, y: 8, z: 11.2 },
+      { x: 8, y: 8, z: 11.2 },
+      { x: -12.7, y: 8, z: 5 },
+      { x: -12.7, y: 8, z: -5 }
+    ];
 
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getFirestore(app);
-    const provider = new GoogleAuthProvider();
-
-    const loginBtn = document.getElementById('loginBtn');
-    const workoutsDiv = document.getElementById('workouts');
-    const modal = document.getElementById('workoutModal');
-    const addBtn = document.getElementById('addBtn');
-    const saveBtn = document.getElementById('saveBtn');
-
-    let userRole = 'eleve';
-
-    // 🔐 Connexion Google
-    loginBtn.addEventListener('click', async () => {
-      if (auth.currentUser) {
-        await signOut(auth);
-        document.body.classList.remove('coach');
-        loginBtn.innerText = "Connexion Google";
-        return;
+    windowPositions.forEach((pos) => {
+      const window1 = new THREE.Mesh(windowGeo, windowMat);
+      window1.position.set(pos.x, pos.y, pos.z);
+      if (pos.z !== 11.2) {
+        window1.rotation.y = Math.PI / 2;
       }
-      try {
-        const result = await signInWithPopup(auth, provider);
-        const user = result.user;
-        const isCoach = user.email.toLowerCase().includes("coach");
-        userRole = isCoach ? 'coach' : 'eleve';
-        document.body.classList.toggle('coach', isCoach);
-        loginBtn.innerText = "Déconnexion";
-        loadWorkouts();
-        alert(`Connecté : ${user.displayName} (${isCoach ? 'Coach' : 'Élève'})`);
-      } catch (e) {
-        alert("Erreur de connexion : " + e.message);
-      }
+      houseGroup.add(window1);
+
+      const frameGeo = new THREE.BoxGeometry(2.8, 3.3, 0.2);
+      const frameMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const frame = new THREE.Mesh(frameGeo, frameMat);
+      frame.position.copy(window1.position);
+      frame.position.z -= 0.05;
+      frame.rotation.copy(window1.rotation);
+      houseGroup.add(frame);
     });
 
-    // 📥 Charger les entraînements
-    async function loadWorkouts() {
-      workoutsDiv.innerHTML = "";
-      const query = await getDocs(collection(db, "workouts"));
-      query.forEach(docSnap => {
-        const w = docSnap.data();
-        const div = document.createElement('div');
-        div.className = "card";
-        div.innerHTML = `
-          <img src="${w.image}" alt="">
-          <div class="card-content">
-            <h3>${w.title}</h3>
-            <p>Durée : ${w.duration}</p>
-            <button class="btn" onclick="deleteWorkout('${docSnap.id}')">Supprimer</button>
-          </div>`;
-        workoutsDiv.appendChild(div);
+    const doorGeo = new THREE.BoxGeometry(3.5, 6, 0.3);
+    const doorMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+    const door = new THREE.Mesh(doorGeo, doorMat);
+    door.position.set(-5, 3, 11.2);
+    houseGroup.add(door);
+
+    const doorFrameGeo = new THREE.BoxGeometry(4, 6.5, 0.4);
+    const doorFrameMat = new THREE.MeshLambertMaterial({ color: 0x3e2723 });
+    const doorFrame = new THREE.Mesh(doorFrameGeo, doorFrameMat);
+    doorFrame.position.set(-5, 3, 11.1);
+    houseGroup.add(doorFrame);
+
+    const knobGeo = new THREE.SphereGeometry(0.15, 8, 8);
+    const knobMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
+    const knob = new THREE.Mesh(knobGeo, knobMat);
+    knob.position.set(-6.5, 3, 11.3);
+    houseGroup.add(knob);
+
+    const fenceHeight = 2;
+    const fencePosts = [
+      { x: -20, z: 15 }, { x: -15, z: 15 }, { x: -10, z: 15 },
+      { x: 20, z: 15 }, { x: 15, z: 15 }, { x: 10, z: 15 },
+      { x: -20, z: -15 }, { x: -15, z: -15 }, { x: -10, z: -15 },
+      { x: 20, z: -15 }, { x: 15, z: -15 }, { x: 10, z: -15 }
+    ];
+
+    fencePosts.forEach((pos) => {
+      const postGeo = new THREE.BoxGeometry(0.3, fenceHeight, 0.3);
+      const postMat = new THREE.MeshLambertMaterial({ color: 0x8b7355 });
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(pos.x, fenceHeight / 2, pos.z);
+      post.castShadow = true;
+      houseGroup.add(post);
+    });
+
+    houseGroup.position.set(0, 0, -25);
+    scene.add(houseGroup);
+
+    const basementDoorGeo = new THREE.BoxGeometry(3, 5, 0.5);
+    const basementDoorMat = new THREE.MeshLambertMaterial({ color: 0x2c2416 });
+    const basementDoor = new THREE.Mesh(basementDoorGeo, basementDoorMat);
+    basementDoor.position.set(10, 2.5, 11.3);
+    basementDoor.castShadow = true;
+    houseGroup.add(basementDoor);
+
+    const lockGeo = new THREE.BoxGeometry(0.4, 0.8, 0.2);
+    const lockMat = new THREE.MeshLambertMaterial({ color: 0x808080 });
+    const lock = new THREE.Mesh(lockGeo, lockMat);
+    lock.position.set(11, 3, 11.5);
+    houseGroup.add(lock);
+
+    // player
+    const playerGroup = new THREE.Group();
+
+    const bodyGeo = new THREE.BoxGeometry(1.2, 1.8, 0.8);
+    const bodyMat = new THREE.MeshLambertMaterial({ color: 0x4a90e2 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 1;
+    body.castShadow = true;
+    playerGroup.add(body);
+
+    const headGeo = new THREE.BoxGeometry(1, 1, 1);
+    const headMat = new THREE.MeshLambertMaterial({ color: 0xffdbac });
+    const head = new THREE.Mesh(headGeo, headMat);
+    head.position.y = 2.4;
+    head.castShadow = true;
+    playerGroup.add(head);
+
+    const eyeGeo = new THREE.BoxGeometry(0.2, 0.15, 0.1);
+    const eyeMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-0.25, 2.5, 0.5);
+    playerGroup.add(leftEye);
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(0.25, 2.5, 0.5);
+    playerGroup.add(rightEye);
+
+    const legGeo = new THREE.BoxGeometry(0.4, 1, 0.4);
+    const legMat = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+    const leftLeg = new THREE.Mesh(legGeo, legMat);
+    leftLeg.position.set(-0.4, 0, 0);
+    leftLeg.castShadow = true;
+    playerGroup.add(leftLeg);
+    const rightLeg = new THREE.Mesh(legGeo, legMat);
+    rightLeg.position.set(0.4, 0, 0);
+    rightLeg.castShadow = true;
+    playerGroup.add(rightLeg);
+
+    playerGroup.position.set(0, 0, 25);
+    scene.add(playerGroup);
+
+    // neighbor
+    const neighborGroup = new THREE.Group();
+
+    const nBodyGeo = new THREE.BoxGeometry(1.5, 2.2, 1);
+    const nBodyMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
+    const nBody = new THREE.Mesh(nBodyGeo, nBodyMat);
+    nBody.position.y = 1.2;
+    nBody.castShadow = true;
+    neighborGroup.add(nBody);
+
+    const nHeadGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+    const nHeadMat = new THREE.MeshLambertMaterial({ color: 0xd4a574 });
+    const nHead = new THREE.Mesh(nHeadGeo, nHeadMat);
+    nHead.position.y = 2.9;
+    nHead.castShadow = true;
+    neighborGroup.add(nHead);
+
+    const mustacheGeo = new THREE.BoxGeometry(0.8, 0.2, 0.15);
+    const mustacheMat = new THREE.MeshLambertMaterial({ color: 0x3e2723 });
+    const mustache = new THREE.Mesh(mustacheGeo, mustacheMat);
+    mustache.position.set(0, 2.7, 0.6);
+    neighborGroup.add(mustache);
+
+    const nEyeGeo = new THREE.BoxGeometry(0.15, 0.15, 0.1);
+    const nEyeMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+    const nLeftEye = new THREE.Mesh(nEyeGeo, nEyeMat);
+    nLeftEye.position.set(-0.3, 3, 0.6);
+    neighborGroup.add(nLeftEye);
+    const nRightEye = new THREE.Mesh(nEyeGeo, nEyeMat);
+    nRightEye.position.set(0.3, 3, 0.6);
+    neighborGroup.add(nRightEye);
+
+    const pupilGeo = new THREE.BoxGeometry(0.08, 0.08, 0.05);
+    const pupilMat = new THREE.MeshLambertMaterial({ color: 0x000000 });
+    const nLeftPupil = new THREE.Mesh(pupilGeo, pupilMat);
+    nLeftPupil.position.set(-0.3, 3, 0.65);
+    neighborGroup.add(nLeftPupil);
+    const nRightPupil = new THREE.Mesh(pupilGeo, pupilMat);
+    nRightPupil.position.set(0.3, 3, 0.65);
+    neighborGroup.add(nRightPupil);
+
+    const nLegGeo = new THREE.BoxGeometry(0.5, 1.2, 0.5);
+    const nLegMat = new THREE.MeshLambertMaterial({ color: 0x2c3e50 });
+    const nLeftLeg = new THREE.Mesh(nLegGeo, nLegMat);
+    nLeftLeg.position.set(-0.5, 0, 0);
+    nLeftLeg.castShadow = true;
+    neighborGroup.add(nLeftLeg);
+    const nRightLeg = new THREE.Mesh(nLegGeo, nLegMat);
+    nRightLeg.position.set(0.5, 0, 0);
+    nRightLeg.castShadow = true;
+    neighborGroup.add(nRightLeg);
+
+    neighborGroup.position.set(5, 0, -15);
+    scene.add(neighborGroup);
+
+    // keys (rename to keyItems to avoid conflict with keysRef)
+    const keyItems = [];
+    const keyPositions = [
+      { x: -18, z: -8 },
+      { x: 12, z: -30 },
+      { x: -10, z: -35 }
+    ];
+
+    keyPositions.forEach((pos) => {
+      const keyGroup = new THREE.Group();
+
+      const keyBodyGeo = new THREE.BoxGeometry(0.3, 1.5, 0.3);
+      const keyMat = new THREE.MeshLambertMaterial({
+        color: 0xffd700,
+        emissive: 0xffaa00,
+        emissiveIntensity: 0.3
       });
+      const keyBody = new THREE.Mesh(keyBodyGeo, keyMat);
+      keyGroup.add(keyBody);
+
+      const keyHeadGeo = new THREE.TorusGeometry(0.4, 0.12, 8, 16);
+      const keyHead = new THREE.Mesh(keyHeadGeo, keyMat);
+      keyHead.rotation.x = Math.PI / 2;
+      keyHead.position.y = 0.9;
+      keyGroup.add(keyHead);
+
+      const toothGeo = new THREE.BoxGeometry(0.15, 0.3, 0.15);
+      const tooth1 = new THREE.Mesh(toothGeo, keyMat);
+      tooth1.position.set(0, -0.9, 0);
+      keyGroup.add(tooth1);
+      const tooth2 = new THREE.Mesh(toothGeo, keyMat);
+      tooth2.position.set(0, -0.6, 0);
+      keyGroup.add(tooth2);
+
+      keyGroup.position.set(pos.x, 1.5, pos.z);
+      keyGroup.castShadow = true;
+      scene.add(keyGroup);
+      keyItems.push({ mesh: keyGroup, collected: false });
+    });
+
+    // trees
+    for (let i = 0; i < 8; i++) {
+      const treeGroup = new THREE.Group();
+
+      const trunkGeo = new THREE.CylinderGeometry(0.5, 0.6, 4, 8);
+      const trunkMat = new THREE.MeshLambertMaterial({ color: 0x5d4037 });
+      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      trunk.position.y = 2;
+      trunk.castShadow = true;
+      treeGroup.add(trunk);
+
+      const foliageGeo = new THREE.SphereGeometry(2.5, 8, 8);
+      const foliageMat = new THREE.MeshLambertMaterial({ color: 0x2d5016 });
+      const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+      foliage.position.y = 5;
+      foliage.castShadow = true;
+      treeGroup.add(foliage);
+
+      const angle = (i / 8) * Math.PI * 2;
+      const radius = 35 + Math.random() * 15;
+      treeGroup.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
+      scene.add(treeGroup);
     }
 
-    // ➕ Ajouter un entraînement (Coach)
-    addBtn.onclick = () => { if (userRole === 'coach') modal.classList.add('show'); };
-    saveBtn.onclick = async () => {
-      const title = document.getElementById('titleInput').value;
-      const duration = document.getElementById('durationInput').value;
-      const image = document.getElementById('imageInput').value;
-      if (!title) return alert("Nom obligatoire");
-      await addDoc(collection(db, "workouts"), { title, duration, image });
-      modal.classList.remove('show');
-      loadWorkouts();
+    camera.position.set(0, 18, 35);
+    camera.lookAt(playerGroup.position);
+
+    // input: keyboard handlers
+    const keydownHandler = (e) => {
+      input[e.key?.toLowerCase()] = true;
     };
-    modal.onclick = e => { if (e.target === modal) modal.classList.remove('show'); };
+    const keyupHandler = (e) => {
+      input[e.key?.toLowerCase()] = false;
+    };
+    window.addEventListener('keydown', keydownHandler);
+    window.addEventListener('keyup', keyupHandler);
 
-    // 🗑️ Supprimer (Coach)
-    window.deleteWorkout = async (id) => {
-      if (userRole !== 'coach') return alert("Réservé au coach !");
-      await deleteDoc(doc(db, "workouts", id));
-      loadWorkouts();
+    // pointer lock / mouse joystick support (desktop)
+    // We'll allow click-and-drag on the joystick, but for simplicity we won't implement pointer lock.
+
+    // === joystick DOM handling: attach listeners to the renderer.domElement ===
+    // We will handle touch events at the document level so it works even if finger drifts.
+    const touchStart = (ev) => {
+      for (let i = 0; i < ev.changedTouches.length; i++) {
+        const t = ev.changedTouches[i];
+        // We'll only start joystick if touch is on left half of screen
+        if (t.clientX < window.innerWidth * 0.6) { // allow area
+          // if not active, claim this touch
+          if (!joystickState.active) {
+            joystickState.active = true;
+            joystickState.identifier = t.identifier;
+            joystickState.originX = t.clientX;
+            joystickState.originY = t.clientY;
+            joystickState.stickX = 0;
+            joystickState.stickY = 0;
+            // record initial normalized 0,0
+            input.joystickX = 0;
+            input.joystickY = 0;
+            // prevent default to avoid page scroll
+            ev.preventDefault();
+            break;
+          }
+        }
+      }
     };
 
-    // Charge les séances dès le départ (élève non connecté)
-    loadWorkouts();
-  </script>
-</body>
-</html>
+    const touchMove = (ev) => {
+      if (!joystickState.active) return;
+      for (let i = 0; i < ev.changedTouches.length; i++) {
+        const t = ev.changedTouches[i];
+        if (t.identifier === joystickState.identifier) {
+          const dx = t.clientX - joystickState.originX;
+          const dy = t.clientY - joystickState.originY;
+          // joystick max radius
+          const maxR = 60; // pixels
+          // invert Y because forward is negative Z
+          const nx = Math.max(-1, Math.min(1, dx / maxR));
+          const ny = Math.max(-1, Math.min(1, dy / maxR)) * -1;
+          // small deadzone
+          const dead = 0.15;
+          input.joystickX = Math.abs(nx) > dead ? nx : 0;
+          input.joystickY = Math.abs(ny) > dead ? ny : 0;
+          // update stick positions for rendering
+          joystickState.stickX = nx * Math.min(maxR, Math.abs(dx));
+          joystickState.stickY = -ny * Math.min(maxR, Math.abs(dy)); // invert for CSS coordinates
+          ev.preventDefault();
+          break;
+        }
+      }
+    };
 
+    const touchEnd = (ev) => {
+      if (!joystickState.active) return;
+      for (let i = 0; i < ev.changedTouches.length; i++) {
+        const t = ev.changedTouches[i];
+        if (t.identifier === joystickState.identifier) {
+          joystickState.active = false;
+          joystickState.identifier = null;
+          joystickState.stickX = 0;
+          joystickState.stickY = 0;
+          input.joystickX = 0;
+          input.joystickY = 0;
+          ev.preventDefault();
+          break;
+        }
+      }
+    };
+
+    // Sprint button touch handlers (optional)
+    const sprintStart = (e) => {
+      input.sprint = true;
+      e.preventDefault();
+    };
+    const sprintEnd = (e) => {
+      input.sprint = false;
+      e.preventDefault();
+    };
+
+    document.addEventListener('touchstart', touchStart, { passive: false });
+    document.addEventListener('touchmove', touchMove, { passive: false });
+    document.addEventListener('touchend', touchEnd, { passive: false });
+    document.addEventListener('touchcancel', touchEnd, { passive: false });
+
+    // Also mouse support for joystick (drag with left mouse on left side)
+    let mouseActive = false;
+    const mouseDown = (e) => {
+      if (e.button !== 0) return;
+      if (e.clientX < window.innerWidth * 0.6) {
+        mouseActive = true;
+        joystickState.active = true;
+        joystickState.originX = e.clientX;
+        joystickState.originY = e.clientY;
+        input.joystickX = 0;
+        input.joystickY = 0;
+      }
+    };
+    const mouseMove = (e) => {
+      if (!mouseActive) return;
+      const dx = e.clientX - joystickState.originX;
+      const dy = e.clientY - joystickState.originY;
+      const maxR = 60;
+      const nx = Math.max(-1, Math.min(1, dx / maxR));
+      const ny = Math.max(-1, Math.min(1, dy / maxR)) * -1;
+      const dead = 0.15;
+      input.joystickX = Math.abs(nx) > dead ? nx : 0;
+      input.joystickY = Math.abs(ny) > dead ? ny : 0;
+      joystickState.stickX = nx * Math.min(maxR, Math.abs(dx));
+      joystickState.stickY = -ny * Math.min(maxR, Math.abs(dy));
+    };
+    const mouseUp = () => {
+      mouseActive = false;
+      joystickState.active = false;
+      joystickState.stickX = 0;
+      joystickState.stickY = 0;
+      input.joystickX = 0;
+      input.joystickY = 0;
+    };
+    document.addEventListener('mousedown', mouseDown);
+    document.addEventListener('mousemove', mouseMove);
+    document.addEventListener('mouseup', mouseUp);
+
+    // game loop variables
+    let gameActive = true;
+    const clock = new THREE.Clock();
+    let neighborState = 'patrol';
+    let patrolPoints = [
+      new THREE.Vector3(5, 0, -15),
+      new THREE.Vector3(-12, 0, -20),
+      new THREE.Vector3(10, 0, -35),
+      new THREE.Vector3(0, 0, -28)
+    ];
+    let currentPatrolIndex = 0;
+    let chaseTimer = 0;
+    let walkAnimation = 0;
+
+    // animate loop
+    const animate = () => {
+      if (!gameActive) return;
+      requestAnimationFrame(animate);
+
+      const delta = clock.getDelta();
+      // speed base (units per second) scaled by delta
+      let baseSpeed = 10;
+      if (input.sprint) baseSpeed = 16;
+      const moveSpeed = baseSpeed * delta;
+      const neighborSpeed = 7 * delta;
+
+      let moving = false;
+
+      // keyboard movement (legacy)
+      if (input.w || input.arrowup) {
+        playerGroup.position.z -= moveSpeed;
+        playerGroup.rotation.y = 0;
+        moving = true;
+      }
+      if (input.s || input.arrowdown) {
+        playerGroup.position.z += moveSpeed;
+        playerGroup.rotation.y = Math.PI;
+        moving = true;
+      }
+      if (input.a || input.arrowleft) {
+        playerGroup.position.x -= moveSpeed;
+        playerGroup.rotation.y = Math.PI / 2;
+        moving = true;
+      }
+      if (input.d || input.arrowright) {
+        playerGroup.position.x += moveSpeed;
+        playerGroup.rotation.y = -Math.PI / 2;
+        moving = true;
+      }
+
+      // joystick movement (vector)
+      const jx = input.joystickX || 0;
+      const jy = input.joystickY || 0;
+      if (jx !== 0 || jy !== 0) {
+        // apply movement relative to world X,Z (simple)
+        playerGroup.position.x += jx * moveSpeed * 1.1;
+        playerGroup.position.z += jy * moveSpeed * 1.1;
+        moving = true;
+        // rotation based on joystick direction
+        const angle = Math.atan2(jx, -jy); // convert joystick to facing angle
+        playerGroup.rotation.y = angle;
+      }
+
+      // walking animation legs indices: we added leftLeg and rightLeg earlier as children[4],[5]
+      if (moving) {
+        walkAnimation += delta * 8;
+        if (playerGroup.children[4]) playerGroup.children[4].rotation.x = Math.sin(walkAnimation) * 0.3;
+        if (playerGroup.children[5]) playerGroup.children[5].rotation.x = Math.sin(walkAnimation + Math.PI) * 0.3;
+      } else {
+        if (playerGroup.children[4]) playerGroup.children[4].rotation.x = 0;
+        if (playerGroup.children[5]) playerGroup.children[5].rotation.x = 0;
+      }
+
+      // clamp player position to bounds
+      playerGroup.position.x = Math.max(-45, Math.min(45, playerGroup.position.x));
+      playerGroup.position.z = Math.max(-50, Math.min(35, playerGroup.position.z));
+
+      // camera follow
+      const cameraOffset = new THREE.Vector3(0, 18, 15);
+      const targetCameraPos = playerGroup.position.clone().add(cameraOffset);
+      camera.position.lerp(targetCameraPos, 0.1);
+      camera.lookAt(playerGroup.position.x, playerGroup.position.y + 2, playerGroup.position.z - 5);
+
+      // keys collection
+      keyItems.forEach((key) => {
+        if (!key.collected) {
+          const dist = playerGroup.position.distanceTo(key.mesh.position);
+          if (dist < 2.5) {
+            key.collected = true;
+            scene.remove(key.mesh);
+            setKeysFound(prev => {
+              const newCount = prev + 1;
+              if (newCount === 3) {
+                setMessage('All keys found! Get to the basement door!');
+              } else {
+                setMessage(`Key found! ${newCount}/3 - Keep searching!`);
+              }
+              return newCount;
+            });
+          } else {
+            // rotate / bob
+            key.mesh.rotation.y += delta * 2;
+            key.mesh.position.y = 1.5 + Math.sin(Date.now() * 0.002) * 0.3;
+          }
+        }
+      });
+
+      // basement check
+      const distToBasement = playerGroup.position.distanceTo(new THREE.Vector3(10, 0, -13.7));
+      if (distToBasement < 3 && keysFound === 3) {
+        gameActive = false;
+        setGameState('won');
+        setMessage('You escaped the neighbor!');
+      }
+
+      // neighbor AI (patrol / chase)
+      const distToPlayer = neighborGroup.position.distanceTo(playerGroup.position);
+      const canSeePlayer = distToPlayer < 20;
+
+      if (canSeePlayer && distToPlayer < 15) {
+        neighborState = 'chase';
+        chaseTimer = 4;
+      } else if (chaseTimer > 0) {
+        chaseTimer -= delta;
+        neighborState = 'chase';
+      } else {
+        neighborState = 'patrol';
+      }
+
+      if (neighborState === 'chase') {
+        const direction = new THREE.Vector3()
+          .subVectors(playerGroup.position, neighborGroup.position)
+          .normalize();
+        neighborGroup.position.add(direction.multiplyScalar(neighborSpeed * 1.8));
+        neighborGroup.lookAt(playerGroup.position.x, neighborGroup.position.y, playerGroup.position.z);
+        if (neighborGroup.children[0]) neighborGroup.children[0].rotation.z = Math.sin(Date.now() * 0.01) * 0.1;
+      } else {
+        const neighborTarget = patrolPoints[currentPatrolIndex];
+        const dirToTarget = new THREE.Vector3()
+          .subVectors(neighborTarget, neighborGroup.position);
+
+        if (dirToTarget.length() < 1.5) {
+          currentPatrolIndex = (currentPatrolIndex + 1) % patrolPoints.length;
+        } else {
+          dirToTarget.normalize();
+          neighborGroup.position.add(dirToTarget.multiplyScalar(neighborSpeed));
+          neighborGroup.lookAt(neighborTarget.x, neighborGroup.position.y, neighborTarget.z);
+        }
+
+        if (neighborGroup.children[0]) neighborGroup.children[0].rotation.z = 0;
+      }
+
+      walkAnimation += delta * 6;
+      // guard children index safety
+      if (neighborGroup.children[7]) neighborGroup.children[7].rotation.x = Math.sin(walkAnimation) * 0.3;
+      if (neighborGroup.children[8]) neighborGroup.children[8].rotation.x = Math.sin(walkAnimation + Math.PI) * 0.3;
+
+      // caught check
+      if (distToPlayer < 2) {
+        gameActive = false;
+        setGameState('caught');
+        setMessage('The neighbor caught you!');
+      }
+
+      renderer.render(scene, camera);
+    };
+
+    animate();
+
+    // resize
+    const handleResize = () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    };
+    window.addEventListener('resize', handleResize);
+
+    // cleanup when effect re-runs or component unmounts
+    return () => {
+      gameActive = false;
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('keydown', keydownHandler);
+      window.removeEventListener('keyup', keyupHandler);
+      document.removeEventListener('touchstart', touchStart);
+      document.removeEventListener('touchmove', touchMove);
+      document.removeEventListener('touchend', touchEnd);
+      document.removeEventListener('touchcancel', touchEnd);
+      document.removeEventListener('mousedown', mouseDown);
+      document.removeEventListener('mousemove', mouseMove);
+      document.removeEventListener('mouseup', mouseUp);
+      try {
+        mountRef.current?.removeChild(renderer.domElement);
+      } catch (err) {
+        // ignore
+      }
+      scene.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach(m => m.dispose && m.dispose());
+          } else {
+            obj.material.dispose && obj.material.dispose();
+          }
+        }
+      });
+      renderer.dispose();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keysFound]); // rerun when keysFound changes (so resetGame will recreate scene)
+
+  // reset (this will change keysFound and re-trigger effect recreation)
+  const resetGame = () => {
+    setGameState('playing');
+    // increment then reset pattern to force effect re-run: set to 0 triggers useEffect already
+    setKeysFound(0);
+    setMessage('Find 3 keys to unlock the basement!');
+  };
+
+  // Sprint handlers for the on-screen button
+  const handleSprintDown = (e) => {
+    e.preventDefault();
+    keysRef.current.sprint = true;
+  };
+  const handleSprintUp = (e) => {
+    e.preventDefault();
+    keysRef.current.sprint = false;
+  };
+
+  // joystick rendering math (read from joystickRef)
+  const js = joystickRef.current;
+  const joystickSize = 140;
+  const baseRadius = 56; // visual base radius
+  const stickRadius = 28;
+
+  return (
+    <div style={{ width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative', touchAction: 'none' }}>
+      <div ref={mountRef} style={{ width: '100%', height: '100%' }} />
+
+      {/* HUD top-left */}
+      <div style={{
+        position: 'absolute',
+        top: 20,
+        left: 20,
+        background: 'linear-gradient(135deg, rgba(0,0,0,0.85) 0%, rgba(40,40,40,0.85) 100%)',
+        color: 'white',
+        padding: '20px 25px',
+        borderRadius: 15,
+        fontFamily: 'Arial Black, Arial, sans-serif',
+        border: '3px solid #ffd700',
+        boxShadow: '0 8px 20px rgba(0,0,0,0.6)'
+      }}>
+        <div style={{ fontSize: 24, marginBottom: 10, color: '#ffd700', textShadow: '2px 2px 4px #000' }}>
+          🔑 KEYS: {keysFound}/3
+        </div>
+        <div style={{ fontSize: 14, color: '#ffeb3b', fontWeight: 'bold' }}>
+          {message}
+        </div>
+      </div>
+
+      {/* Controls instructions bottom-left */}
+      <div style={{
+        position: 'absolute',
+        bottom: 20,
+        left: 20,
+        background: 'rgba(0,0,0,0.85)',
+        color: 'white',
+        padding: '15px 20px',
+        borderRadius: 12,
+        fontFamily: 'Arial, sans-serif',
+        fontSize: 13,
+        border: '2px solid #555'
+      }}>
+        <div style={{ fontWeight: 'bold', marginBottom: 5, color: '#ffd700' }}>🎮 CONTROLS:</div>
+        <div>WASD / Arrow Keys - Move</div>
+        <div style={{ color: '#ff6b6b', fontWeight: 'bold' }}>⚠️ Avoid the Neighbor!</div>
+      </div>
+
+      {/* Game over / victory overlay */}
+      {gameState !== 'playing' && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: gameState === 'won'
+            ? 'linear-gradient(135deg, rgba(46,125,50,0.95) 0%, rgba(27,94,32,0.95) 100%)'
+            : 'linear-gradient(135deg, rgba(183,28,28,0.95) 0%, rgba(136,14,79,0.95) 100%)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          fontFamily: 'Arial Black, Arial, sans-serif'
+        }}>
+          <div style={{
+            fontSize: 64,
+            marginBottom: 20,
+            textShadow: '4px 4px 8px rgba(0,0,0,0.8)'
+          }}>
+            {gameState === 'won' ? '🎉 VICTORY!' : '😱 CAUGHT!'}
+          </div>
+          <div style={{
+            fontSize: 28,
+            marginBottom: 40,
+            textShadow: '2px 2px 4px rgba(0,0,0,0.8)'
+          }}>
+            {message}
+          </div>
+          <button
+            onClick={resetGame}
+            style={{
+              padding: '20px 50px',
+              fontSize: 20,
+              background: '#2196f3',
+              color: 'white',
+              border: 'none',
+              borderRadius: 10,
+              cursor: 'pointer',
+              fontWeight: 'bold',
+              boxShadow: '0 4px 15px rgba(0,0,0,0.5)'
+            }}
+          >
+            Play Again
+          </button>
+        </div>
+      )}
+
+      {/* --- Joystick UI (left-bottom) --- */}
+      <div
+        // container so touches inside don't scroll page
+        style={{
+          position: 'absolute',
+          left: 18,
+          bottom: 18,
+          width: joystickSize,
+          height: joystickSize,
+          borderRadius: joystickSize / 2,
+          touchAction: 'none', // important to prevent scrolling while dragging
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+          zIndex: 30,
+          // visual hint of base transparent
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        {/* base circle */}
+        <div
+          style={{
+            position: 'absolute',
+            width: baseRadius * 2,
+            height: baseRadius * 2,
+            borderRadius: baseRadius,
+            background: 'rgba(0,0,0,0.18)',
+            border: '2px solid rgba(255,255,255,0.06)',
+            boxShadow: joystickRef.current.active ? 'inset 0 0 20px rgba(0,0,0,0.4)' : 'none'
+          }}
+        />
+        {/* stick */}
+        <div
+          style={{
+            position: 'absolute',
+            width: stickRadius * 2,
+            height: stickRadius * 2,
+            borderRadius: stickRadius,
+            transform: `translate(${js.stickX}px, ${js.stickY}px)`,
+            transition: js.active ? 'none' : 'transform 120ms ease-out',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.95), rgba(230,230,230,0.9))',
+            boxShadow: '0 6px 18px rgba(0,0,0,0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          {/* small center */}
+          <div style={{
+            width: 8,
+            height: 8,
+            borderRadius: 4,
+            background: '#555'
+          }} />
+        </div>
+      </div>
+
+      {/* Sprint button (right-bottom) */}
+      <div style={{
+        position: 'absolute',
+        right: 20,
+        bottom: 26,
+        zIndex: 40
+      }}>
+        <button
+          onTouchStart={handleSprintDown}
+          onTouchEnd={handleSprintUp}
+          onMouseDown={(e) => { e.preventDefault(); keysRef.current.sprint = true; }}
+          onMouseUp={(e) => { e.preventDefault(); keysRef.current.sprint = false; }}
+          style={{
+            width: 86,
+            height: 86,
+            borderRadius: 16,
+            background: 'linear-gradient(180deg, #ff6b6b, #e53935)',
+            color: 'white',
+            fontSize: 16,
+            fontWeight: 'bold',
+            border: 'none',
+            boxShadow: '0 8px 20px rgba(0,0,0,0.5)'
+          }}
+        >
+          SPRINT
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default HelloNeighbor3D;
