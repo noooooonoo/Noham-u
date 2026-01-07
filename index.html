@@ -1,878 +1,440 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Web OS - Store, Paint, Montage Vidéo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    html,body {height:100%;width:100%;}
-    body {
-      margin:0;
-      width:100vw;height:100vh;
-      background:#20242e url('https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1500&q=80') no-repeat center center fixed;
-      background-size:cover;
-      font-family:Segoe UI,sans-serif;
-      overflow:hidden;
-      position:relative;
-    }
-    #windows-intro {
-      position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;
-      background:radial-gradient(ellipse at center,#1762a7 60%,#0a1232 100%);
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      animation:fadeOut 1.2s 2.3s forwards;
-    }
-    @keyframes fadeOut {to{opacity:0;pointer-events:none;}}
-    #windows-logo {
-      width:90px;height:90px;display:block;margin-bottom:27px;
-    }
-    #windows-intro h1 {color:#fff;font-weight:400;font-size:2.2em;margin:0 0 9px 0;letter-spacing:1.2px;}
-    #windows-intro small {color:#bde0ff;font-size:1.1em;}
-    #desktop-icons {
-      position:absolute;left:0;top:0;right:0;bottom:54px;z-index:1;
-    }
-    .desktop-icon {
-      position:absolute;
-      width:86px;
-      text-align:center;
-      color:#fff;
-      cursor:pointer;
-      user-select:none;
-      filter:drop-shadow(0 0 3px #000b);
-      transition:filter 0.14s;
-      border-radius:18px;
-      background:#fff0;
-      box-shadow:none;
-      padding:5px 0 6px 0;
-    }
-    .desktop-icon img {
-      width:60px;height:60px;border-radius:14px;background:#fff;
-      margin-top:7px;
-      border:2px solid #fff;
-      box-shadow:none;
-      transition:box-shadow 0.12s, border 0.16s;
-    }
-    .desktop-icon span {
-      display:block;margin-top:6px;font-size:16px;text-shadow:1px 1px 4px #000;
-      font-weight:bold;letter-spacing:.5px;
-      color:#fff;
-      filter:brightness(1.12);
-    }
-    .desktop-icon:hover {filter:brightness(1.11);}
-    .desktop-icon:hover img {border:2px solid #eee;}
-    .taskbar {
-      position:fixed;left:0;bottom:0;right:0;height:54px;
-      background:rgba(30,44,68,0.92);
-      display:flex;align-items:center;z-index:50;
-      border-top:1.5px solid #223;
-    }
-    .start-btn {
-      background:#2590fa;
-      border:none;color:#fff;padding:13px 21px;
-      border-radius:9px;margin-left:14px;cursor:pointer;
-      font-weight:bold;font-size:20px;box-shadow:0 2px 8px #0004;
-      letter-spacing:.6px;display:flex;align-items:center;gap:7px;
-    }
-    .start-btn img{width:22px;}
-    #clock {margin-left:auto;font-size:20px;margin-right:17px;color:#aaf;}
-    #start-menu {
-      display:none;position:fixed;bottom:59px;left:16px;
-      min-width:245px;background:#232f42ee;color:#fff;
-      padding:21px 18px 17px 18px;border-radius:19px;z-index:50;
-      font-size:19px;box-shadow:0 7px 40px #0008;
-    }
-    #start-menu div {
-      cursor:pointer;padding:11px 0 11px 8px;border-radius:7px;
-      transition:background .12s;
-      font-weight:500;
-      display:flex;align-items:center;gap:9px;
-    }
-    #start-menu div:hover {background:#1b3758c7;}
-    .window {
-      position:absolute;top:90px;left:100px;width:470px;max-width:97vw;height:430px;max-height:83vh;
-      background:#fff;border-radius:15px 15px 10px 10px;box-shadow:0 8px 32px #0003;
-      display:none;flex-direction:column;z-index:100;min-width:230px;min-height:140px;
-      animation:winPop .2s;
-      resize: both;
-      overflow: auto;
-    }
-    .resize-handle {
-      position:absolute;
-      right:3px;
-      bottom:3px;
-      width:23px;
-      height:23px;
-      z-index:120;
-      cursor:se-resize;
-      background:url('data:image/svg+xml;utf8,<svg width="24" height="24" xmlns="http://www.w3.org/2000/svg"><path d="M2 22h20M6 18h16M10 14h12" stroke="%232590fa" stroke-width="2" fill="none"/></svg>') no-repeat center center;
-      opacity:0.6;
-    }
-    @keyframes winPop {from{transform:scale(.93);opacity:0;}to{transform:scale(1);opacity:1;}}
-    .window-header {
-      background:#2590fa;color:#fff;font-weight:bold;padding:13px;font-size:18px;
-      border-radius:15px 15px 0 0;cursor:move;display:flex;justify-content:space-between;align-items:center;user-select:none;
-      box-shadow:0 2px 7px #2590fa2f;
-    }
-    .window-close {cursor:pointer;color:#fff;font-weight:bold;font-size:25px;}
-    .window-content {padding:15px;flex:1;overflow:auto;background:#f6f7fa;}
-    textarea {font-family:inherit;}
-    iframe {border:1.5px solid #abc;border-radius:8px;background:#fff;}
-    .ppt-slide-list{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
-    .ppt-slide-thumb{width:56px;height:36px;background:#e3e3e3;border:2px solid #bbb;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
-    .ppt-slide-thumb.selected{border-color:#2590fa;}
-    .ppt-slide-thumb .ppt-num{position:absolute;top:1px;left:2px;font-size:10px;color:#555;}
-    .ppt-controls{margin:8px 0;}
-    .ppt-view{border:2px solid #2590fa;border-radius:7px;background:#fff;padding:15px;height:180px;display:flex;flex-direction:column;align-items:flex-start;}
-    .ppt-title{font-size:21px;font-weight:bold;margin-bottom:7px;}
-    .ppt-img{max-width:100px;max-height:80px;margin:7px 0;}
-    .app-store-list{margin-top:6px;}
-    .app-store-item{background:#f0f4fb;border-radius:9px;box-shadow:0 2px 8px #4299e133;padding:13px 9px 13px 13px;display:flex;align-items:center;margin-bottom:13px;}
-    .app-store-item img{width:44px;height:44px;margin-right:14px;border-radius:10px;}
-    .app-store-item .desc{flex:1;}
-    .app-store-item .desc b{font-size:18px;}
-    .app-store-item .desc small{font-size:13px;color:#3b5fa8;}
-    .install-btn{background:#38b2ac;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:16px;margin-left:7px;}
-    .install-btn[disabled]{background:#b9e4e0;color:#fff;cursor:not-allowed;}
-    .uninstall-btn{
-      background:#e44; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-size:16px;margin-left:7px;
-    }
-    .uninstall-btn[disabled]{background:#faa;color:#fff;cursor:not-allowed;}
-    .paint-tools{margin-bottom:6px;}
-    .paint-pen{display:inline-block;width:23px;height:23px;border-radius:50%;background:#2590fa;border:2px solid #555;vertical-align:middle;margin-right:7px;cursor:pointer;box-sizing:border-box;}
-    .paint-pen.selected{border:3px solid #38b2ac;}
-    .paint-pen.black{background:#1a1a1a;}
-    .paint-pen.red{background:#e44;}
-    .paint-pen.green{background:#2aa948;}
-    .paint-pen.yellow{background:#ffdb4d;}
-    .paint-pen.blue{background:#2590fa;}
-    .paint-pen.purple{background:#8e54e9;}
-    .paint-pen.white{background:#fff;}
-    #taskbar-apps {display:flex;gap:8px;margin-left:12px;}
-    .taskbar-app {
-      background:#eee;border-radius:7px;padding:2px 11px;display:flex;align-items:center;gap:8px;cursor:pointer;
-      border:1.5px solid #2590fa;font-size:16px;color:#2590fa;box-shadow:0 2px 8px #bce6ff11;
-      font-weight:500;transition:background .12s;
-    }
-    .taskbar-app img{width:22px;}
-    .taskbar-app:hover{background:#bce6ff;}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Flapi Bird — Remaster</title>
+<style>
+  :root{
+    --bg-top: #70c5ce;
+    --bg-bottom: #9edeff;
+    --pipe: #2db23b;
+    --pipe-dark: #248f31;
+    --ground: #d99a3a;
+    --panel: rgba(0,0,0,0.45);
+    --accent: #ffd54a;
+    --text: #ffffff;
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(var(--bg-top),var(--bg-bottom));font-family: Inter, "Segoe UI", Roboto, system-ui, Arial; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; display:flex;align-items:center;justify-content:center}
+  .container{width:100%;max-width:900px;padding:18px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;gap:12px}
+  .stage{position:relative;display:inline-block;border-radius:10px;overflow:hidden;box-shadow:0 20px 40px rgba(2,10,23,0.25)}
+  canvas{display:block;background:transparent;image-rendering:optimizeQuality}
+  .ui{
+    position:absolute;left:12px;top:12px;right:12px;display:flex;justify-content:space-between;align-items:center;pointer-events:none;
+  }
+  .score{
+    pointer-events:auto;
+    background:var(--panel);padding:8px 12px;border-radius:8px;color:var(--text);font-weight:700;letter-spacing:1px;font-size:20px;text-align:center;
+    text-shadow:0 1px 0 rgba(0,0,0,0.6);
+  }
+  .controls{pointer-events:auto;display:flex;gap:8px;align-items:center}
+  .btn{
+    background:linear-gradient(#ffffff11,#00000008);border:1px solid rgba(255,255,255,0.06);color:var(--text);padding:6px 10px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;
+    box-shadow:0 2px 6px rgba(0,0,0,0.25);
+  }
+  .titlePanel{
+    position:absolute;left:0;right:0;bottom:18px;display:flex;justify-content:center;pointer-events:none;
+  }
+  .panelMain{
+    pointer-events:auto;
+    background:linear-gradient(180deg, rgba(255,255,255,0.06), rgba(0,0,0,0.1));
+    color:var(--text);padding:12px 18px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);text-align:center;
+    font-weight:600;
+  }
+  .hint{font-size:13px;opacity:0.9}
+  .overlay{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;
+  }
+  .startBox, .gameOverBox{
+    pointer-events:auto;
+    background:rgba(0,0,0,0.6);padding:18px;border-radius:12px;color:#fff;text-align:center;
+    box-shadow:0 8px 40px rgba(0,0,0,0.6)
+  }
+  .startBox h1, .gameOverBox h1{margin:0 0 8px 0;font-size:26px;letter-spacing:1px}
+  .muted{opacity:0.85;font-weight:500;font-size:13px}
+  footer.small{font-size:12px;color:rgba(0,0,0,0.45);margin-top:10px}
+  /* fullscreen styles: make canvas fill parent while preserving aspect ratio */
+  .fullscreen{position:fixed;left:0;top:0;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;z-index:9999}
+  /* pixel-art look when scaled up */
+  .pixelated{image-rendering:crisp-edges;image-rendering:pixelated}
+  @media (max-width:520px){
+    .container{padding:10px}
+    .score{font-size:18px;padding:6px 10px}
+  }
+</style>
 </head>
 <body>
-  <audio id="boot-sound" src="https://cdn.pixabay.com/audio/2022/10/16/audio_12bb3dbb6a.mp3"></audio>
-  <div id="windows-intro">
-    <svg id="windows-logo" viewBox="0 0 48 48"><rect fill="#fff" width="21" height="21"/><rect fill="#fff" width="21" height="21" y="27"/><rect fill="#fff" width="21" height="21" x="27"/><rect fill="#fff" width="21" height="21" x="27" y="27"/></svg>
-    <h1>Bienvenue sur Web OS</h1>
-    <small>Démarrage...</small>
-  </div>
-  <div id="desktop-icons"></div>
-  <!-- Fenêtres natives -->
-  <div class="window" id="win-notes">
-    <div class="window-header">
-      Bloc-notes
-      <span class="window-close" onclick="closeWindow('win-notes')">&times;</span>
-    </div>
-    <div class="window-content">
-      <textarea style="width:99%;height:200px;font-size:17px;">Écrivez ici...</textarea>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-web">
-    <div class="window-header">Navigateur Web
-      <span class="window-close" onclick="closeWindow('win-web')">&times;</span>
-    </div>
-    <div class="window-content" style="display:flex;flex-direction:column;height:100%;">
-      <form id="web-form" onsubmit="openWebUrl();return false;" style="margin-bottom:7px;">
-        <input id="web-url" type="text" placeholder="https://..." style="width:73%;padding:6px;font-size:16px;border-radius:6px;border:1px solid #aaa;" value="https://fr.wikipedia.org">
-        <button type="submit" class="install-btn" style="margin-top:0;">Aller</button>
-      </form>
-      <iframe id="web-frame" src="https://fr.wikipedia.org" style="flex:1;width:100%;min-height:180px;"></iframe>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-ppt">
-    <div class="window-header">PowerPoint
-      <span class="window-close" onclick="closeWindow('win-ppt')">&times;</span>
-    </div>
-    <div class="window-content">
-      <div class="ppt-slide-list" id="ppt-slide-list"></div>
-      <div class="ppt-controls">
-        <button class="install-btn" id="ppt-add-slide">Nouvelle slide</button>
-        <button class="install-btn" id="ppt-del-slide">Supprimer slide</button>
-      </div>
-      <div class="ppt-view">
-        <input id="ppt-title" class="ppt-title" placeholder="Titre de la slide"><br>
-        <textarea id="ppt-txt" style="width:99%;height:52px;" placeholder="Texte"></textarea><br>
-        <input id="ppt-img-url" placeholder="URL image" style="width:70%">
-        <img id="ppt-img" class="ppt-img" style="display:none;">
+<div class="container">
+  <div class="stage" id="stage">
+    <canvas id="screen" class="pixelated"></canvas>
+
+    <div class="ui" id="ui">
+      <div class="score" id="score">0</div>
+      <div class="controls">
+        <button class="btn" id="fsBtn" title="Plein écran (double-clic / F)">⛶</button>
+        <button class="btn" id="muteBtn" title="Activer/Désactiver sons">🔊</button>
       </div>
     </div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-paint">
-    <div class="window-header">
-      Paint
-      <span class="window-close" onclick="closeWindow('win-paint')">&times;</span>
+
+    <div class="titlePanel">
+      <div class="panelMain" id="panelMain">Flapi Bird — Remaster</div>
     </div>
-    <div class="window-content">
-      <div class="paint-tools">
-        <span class="paint-pen black" data-color="#1a1a1a"></span>
-        <span class="paint-pen red" data-color="#e44"></span>
-        <span class="paint-pen green" data-color="#2aa948"></span>
-        <span class="paint-pen yellow" data-color="#ffdb4d"></span>
-        <span class="paint-pen blue selected" data-color="#2590fa"></span>
-        <span class="paint-pen purple" data-color="#8e54e9"></span>
-        <span class="paint-pen white" data-color="#fff"></span>
+
+    <!-- Overlay: start & game over séparés -->
+    <div class="overlay" id="overlay" style="display:flex;">
+      <div class="startBox" id="startBox">
+        <h1>Flapi Bird</h1>
+        <div class="muted">Clique / Tape / Espace pour sauter</div>
+        <div style="height:10px"></div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn" id="startBtn">Jouer</button>
+          <button class="btn" id="resetBtn">Réinitialiser</button>
+        </div>
       </div>
-      <canvas id="paint-canvas" width="390" height="210" style="background:#fff;border-radius:7px;box-shadow:0 2px 8px #0003;cursor:crosshair;"></canvas><br>
-      <button class="install-btn" onclick="paintClear()">Effacer</button>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-tictactoe">
-    <div class="window-header">
-      Tic Tac Toe
-      <span class="window-close" onclick="closeWindow('win-tictactoe')">&times;</span>
-    </div>
-    <div class="window-content">
-      <div class="ttt-board" id="ttt-board"></div>
-      <div class="ttt-info" id="ttt-info"></div>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-music">
-    <div class="window-header">Musique
-      <span class="window-close" onclick="closeWindow('win-music')">&times;</span>
-    </div>
-    <div class="window-content">
-      <input id="music-url" placeholder="URL MP3" style="width:70%">
-      <button class="install-btn" id="music-load">Lire</button>
-      <br><audio id="music-player" controls style="width:95%;margin-top:18px;"></audio>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-calendar">
-    <div class="window-header">Calendrier
-      <span class="window-close" onclick="closeWindow('win-calendar')">&times;</span>
-    </div>
-    <div class="window-content"><div id="calendar-view"></div></div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-fileexplorer">
-    <div class="window-header">Fichiers
-      <span class="window-close" onclick="closeWindow('win-fileexplorer')">&times;</span>
-    </div>
-    <div class="window-content" id="fileexplorer-content">
-      <b>Explorateur fictif</b>
-      <ul><li>CV.txt</li><li>Notes.txt</li><li>vacances.jpg</li></ul>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <!-- App Store fenêtre dynamique -->
-  <div class="window" id="win-store">
-    <div class="window-header">
-      App Store
-      <span class="window-close" onclick="closeWindow('win-store')">&times;</span>
-    </div>
-    <div class="window-content">
-      <b>Applications à installer :</b>
-      <div class="app-store-list" id="store-apps"></div>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <!-- Fenêtre App téléchargée dynamique -->
-  <div id="dynamic-windows"></div>
-  <div class="window" id="win-about">
-    <div class="window-header">À propos
-      <span class="window-close" onclick="closeWindow('win-about')">&times;</span>
-    </div>
-    <div class="window-content">
-      <b>Web OS – Style Windows</b><br>
-      <small>Copilot, 2024</small>
-    </div>
-    <div class="resize-handle"></div>
-  </div>
-  <div class="window" id="win-montage">
-    <div class="window-header">
-      Montage Vidéo
-      <span class="window-close" onclick="closeWindow('win-montage')">&times;</span>
-    </div>
-    <div class="window-content">
-      <b>Mini logiciel de montage vidéo (démo)</b>
-      <div style="margin:10px 0;">
-        <input id="montage-url" placeholder="URL vidéo" style="width:70%">
-        <button class="install-btn" id="montage-load">Ajouter</button>
+
+      <div class="gameOverBox" id="gameOverBox" style="display:none;">
+        <h1>Game Over</h1>
+        <div class="muted" id="gameOverScore">Score: 0 — Meilleur: 0</div>
+        <div style="height:12px"></div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button class="btn" id="retryBtn">Rejouer</button>
+          <button class="btn" id="goStartBtn">Retour au départ</button>
+        </div>
       </div>
-      <div id="montage-timeline" style="background:#e6eaf0;border-radius:9px;padding:7px 0 7px 7px;min-height:44px;display:flex;gap:8px;overflow-x:auto;"></div>
-      <video id="montage-player" controls style="margin-top:14px;max-width:99%;border-radius:7px;display:none;"></video>
     </div>
-    <div class="resize-handle"></div>
+
   </div>
-  <div class="taskbar">
-    <button class="start-btn" onclick="toggleStartMenu()">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/4/48/Windows_logo_-_2012.svg" alt="Windows" />
-      Démarrer
-    </button>
-    <div id="taskbar-apps"></div>
-    <span id="clock"></span>
-  </div>
-  <div id="start-menu">
-    <div onclick="openWindow('win-web')"><img src="https://cdn-icons-png.flaticon.com/512/609/609722.png" width="20"> Navigateur Web</div>
-    <div onclick="openWindow('win-notes')"><img src="https://cdn-icons-png.flaticon.com/512/3039/3039397.png" width="20"> Bloc-notes</div>
-    <div onclick="openWindow('win-ppt')"><img src="https://cdn-icons-png.flaticon.com/512/337/337946.png" width="20"> PowerPoint</div>
-    <div onclick="openWindow('win-paint')"><img src="https://cdn-icons-png.flaticon.com/512/3500/3500833.png" width="20"> Paint</div>
-    <div onclick="openWindow('win-tictactoe')"><img src="https://cdn-icons-png.flaticon.com/512/616/616494.png" width="20"> Morpion</div>
-    <div onclick="openWindow('win-music')"><img src="https://cdn-icons-png.flaticon.com/512/727/727245.png" width="20"> Musique</div>
-    <div onclick="openWindow('win-calendar')"><img src="https://cdn-icons-png.flaticon.com/512/747/747310.png" width="20"> Calendrier</div>
-    <div onclick="openWindow('win-fileexplorer')"><img src="https://cdn-icons-png.flaticon.com/512/634/634013.png" width="20"> Fichiers</div>
-    <div onclick="openWindow('win-store')"><img src="https://cdn-icons-png.flaticon.com/512/4290/4290854.png" width="20"> App Store</div>
-    <div onclick="openWindow('win-montage')"><img src="https://cdn-icons-png.flaticon.com/512/2840/2840175.png" width="20"> Montage Vidéo</div>
-    <div onclick="openWindow('win-about')"><img src="https://cdn-icons-png.flaticon.com/512/25/25231.png" width="20"> À propos</div>
-  </div>
-  <script>
-    // Intro + son Windows
-    setTimeout(()=>{
-      document.getElementById('windows-intro').style.display="none";
-      let audio = document.getElementById('boot-sound');
-      audio.volume=1.0;
-      audio.play().catch(()=>{ // En cas de blocage autoplay, jouer au premier clic
-        window.addEventListener("click",()=>audio.play(),{once:true});
-      });
-    },2400);
+  <footer class="small">Double-clic sur le jeu ou appuyez sur F pour le plein écran · R pour recommencer</footer>
+</div>
 
-    // Apps du bureau, style Windows
-    let desktopApps = [
-      {id:"web", name:"Web", icon:"https://cdn-icons-png.flaticon.com/512/609/609722.png", win:"win-web"},
-      {id:"ppt", name:"PowerPoint", icon:"https://cdn-icons-png.flaticon.com/512/337/337946.png", win:"win-ppt"},
-      {id:"notes", name:"Bloc-notes", icon:"https://cdn-icons-png.flaticon.com/512/3039/3039397.png", win:"win-notes"},
-      {id:"paint", name:"Paint", icon:"https://cdn-icons-png.flaticon.com/512/3500/3500833.png", win:"win-paint"},
-      {id:"tictactoe", name:"Morpion", icon:"https://cdn-icons-png.flaticon.com/512/616/616494.png", win:"win-tictactoe"},
-      {id:"music", name:"Musique", icon:"https://cdn-icons-png.flaticon.com/512/727/727245.png", win:"win-music"},
-      {id:"calendar", name:"Calendrier", icon:"https://cdn-icons-png.flaticon.com/512/747/747310.png", win:"win-calendar"},
-      {id:"fileexplorer", name:"Fichiers", icon:"https://cdn-icons-png.flaticon.com/512/634/634013.png", win:"win-fileexplorer"},
-      {id:"store", name:"App Store", icon:"https://cdn-icons-png.flaticon.com/512/4290/4290854.png", win:"win-store"},
-      {id:"montage", name:"Montage Vidéo", icon:"https://cdn-icons-png.flaticon.com/512/2840/2840175.png", win:"win-montage"},
-      {id:"about", name:"À propos", icon:"https://cdn-icons-png.flaticon.com/512/25/25231.png", win:"win-about"}
-    ];
+<script>
+(() => {
+  const BASE_W = 288, BASE_H = 512;
+  const GROUND_H = 112;
+  const PIPE_W = 52;
+  const PIPE_GAP = 120;
+  const PIPE_INTERVAL = 1400;
+  const MIN_PIPE_TOP = 48;
+  const MAX_PIPE_TOP = BASE_H - GROUND_H - 48 - PIPE_GAP;
 
-    // Applications du Store (téléchargeables)
-    const storeApps = [
-      {
-        id:"calc",
-        name:"Calculatrice",
-        icon:"https://cdn-icons-png.flaticon.com/512/992/992700.png",
-        description:"Calculs simples.",
-        windowHtml:`<div class="window-header">Calculatrice <span class="window-close" onclick="closeWindow('win-calc')">&times;</span></div>
-        <div class="window-content">
-          <input id="calc-display" style="width:90%;font-size:21px;text-align:right;" disabled><br>
-          <div id="calc-btns"></div>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:`
-          let btns="789/456*123-0.=+";let html="";
-          for(let i=0;i<btns.length;i++){
-            html+='<button onclick="calcPress(\\''+btns[i]+'\\')" style="font-size:21px;width:48px;height:48px;margin:2px;">'+btns[i]+'</button>';
-            if((i+1)%4==0) html+="<br>";
-          }
-          document.getElementById('calc-btns').innerHTML=html;
-          let calcVal="";
-          window.calcPress=function(k){
-            let d=document.getElementById('calc-display');
-            if(k==="="){try{calcVal=""+eval(calcVal);}catch(e){calcVal="Erreur";}}
-            else{if(calcVal=="Erreur") calcVal="";calcVal+=k;}
-            d.value=calcVal;
-          }
-        `
-      },
-      {
-        id:"snake",
-        name:"Jeu Snake",
-        icon:"https://cdn-icons-png.flaticon.com/512/1400/1400314.png",
-        description:"Le jeu du serpent.",
-        windowHtml:`<div class="window-header">Snake <span class="window-close" onclick="closeWindow('win-snake')">&times;</span></div>
-        <div class="window-content">
-          <canvas id="snake-canvas" width="250" height="250" style="background:#fff;border-radius:7px;margin-bottom:8px;"></canvas>
-          <div id="snake-score"></div>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:`
-          let sc=document.getElementById('snake-canvas'),ctx=sc.getContext('2d'),S=20,snake=[{x:5,y:5}],dir="RIGHT",food={x:7,y:7},score=0,over=false;
-          function drawSnake(){
-            ctx.clearRect(0,0,sc.width,sc.height);
-            ctx.fillStyle="#2590fa";
-            snake.forEach(s=>ctx.fillRect(s.x*S,s.y*S,S-2,S-2));
-            ctx.fillStyle="#e44";
-            ctx.fillRect(food.x*S,food.y*S,S-2,S-2);
-            document.getElementById('snake-score').textContent="Score: "+score+(over?" | Perdu!":"");
-          }
-          function moveSnake(){
-            if(over)return;
-            let head=Object.assign({},snake[0]);
-            if(dir==="RIGHT")head.x++;
-            if(dir==="LEFT")head.x--;
-            if(dir==="UP")head.y--;
-            if(dir==="DOWN")head.y++;
-            if(head.x<0||head.y<0||head.x>=sc.width/S||head.y>=sc.height/S||snake.some(s=>s.x==head.x&&s.y==head.y)){over=true;drawSnake();return;}
-            snake.unshift(head);
-            if(head.x==food.x&&head.y==food.y){score++;food={x:Math.floor(Math.random()*12),y:Math.floor(Math.random()*12)};}
-            else snake.pop();
-            drawSnake();
-          }
-          setInterval(moveSnake,140);
-          document.onkeydown=e=>{let k=e.key.toUpperCase();if(["ARROWUP","ARROWDOWN","ARROWLEFT","ARROWRIGHT"].includes(k))dir=k.replace("ARROW","");}
-          drawSnake();
-        `
-      },
-      {
-        id:"minesweeper",
-        name:"Démineur",
-        icon:"https://cdn-icons-png.flaticon.com/512/2423/2423830.png",
-        description:"Démineur simplifié.",
-        windowHtml:`<div class="window-header">Démineur <span class="window-close" onclick="closeWindow('win-minesweeper')">&times;</span></div>
-        <div class="window-content">
-          <canvas id="mine-canvas" width="180" height="180" style="background:#eee;border-radius:10px;"></canvas>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:`
-          let mc=document.getElementById('mine-canvas'),ctx2=mc.getContext('2d'),w=6,ms=[],gameover=0;
-          function resetMine(){ms=[];gameover=0;
-            for(let i=0;i<w*w;i++)ms.push({b:Math.random()<0.2,f:0,o:0});
-            drawMine();
-          }
-          function drawMine(){ctx2.clearRect(0,0,180,180);
-            for(let x=0;x<w;x++)for(let y=0;y<w;y++){
-              ctx2.strokeRect(x*30,y*30,30,30);
-              let m=ms[x+y*w];
-              if(m.o){ctx2.fillText(m.b?'💣':m.f,x*30+10,y*30+20);}
-            }
-          }
-          mc.onclick=function(e){if(gameover)return;
-            let x=Math.floor(e.offsetX/30),y=Math.floor(e.offsetY/30),m=ms[x+y*w];
-            if(m.b){gameover=1;ms.forEach(m=>m.o=1);}else{m.o=1;}
-            drawMine();
-          }
-          resetMine();
-        `
-      },
-      {
-        id:"compu",
-        name:"Compu",
-        icon:"https://cdn-icons-png.flaticon.com/512/1782/1782765.png",
-        description:"Mini ordinateur de démo.",
-        windowHtml:`<div class="window-header">Compu <span class="window-close" onclick="closeWindow('win-compu')">&times;</span></div>
-        <div class="window-content">
-          <b>Bienvenue sur Compu !</b><br>
-          <small>Un mini-ordinateur fictif.<br>CPU: 1.44 GHz<br>RAM: 4 Go<br>OS: WebOS<br>Stockage: 64 Go</small>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:``
-      },
-      {
-        id:"pixelart",
-        name:"Pixel Art",
-        icon:"https://cdn-icons-png.flaticon.com/512/3520/3520368.png",
-        description:"Dessine un pixel art 8×8.",
-        windowHtml:`<div class="window-header">Pixel Art <span class="window-close" onclick="closeWindow('win-pixelart')">&times;</span></div>
-        <div class="window-content">
-          <div id="pixelart-grid"></div>
-          <button class="install-btn" onclick="clearPixelArt()">Effacer</button>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:`
-          let grid = document.getElementById('pixelart-grid');
-          let color = "#2590fa";
-          let colors = ["#2590fa","#e44","#ffdb4d","#2aa948","#222","#fff"];
-          function renderPixelArt(){
-            grid.innerHTML='<div style="margin-bottom:7px;">'+colors.map(c=>'<span style="display:inline-block;width:23px;height:23px;margin-right:5px;border-radius:5px;background:'+c+';border:2px solid #ccc;cursor:pointer;" onclick="color=\\''+c+'\\'"></span>').join('')+'</div>';
-            for(let y=0;y<8;y++){
-              for(let x=0;x<8;x++){
-                let cell=document.createElement('div');
-                cell.style.cssText='display:inline-block;width:26px;height:26px;background:#fff;border:1px solid #bbb;cursor:pointer;';
-                cell.onclick=function(){cell.style.background=color;}
-                grid.appendChild(cell);
-              }
-              grid.appendChild(document.createElement('br'));
-            }
-          }
-          window.clearPixelArt=function(){renderPixelArt();}
-          renderPixelArt();
-        `
-      },
-      {
-        id:"notepadpro",
-        name:"Notepad Pro",
-        icon:"https://cdn-icons-png.flaticon.com/512/3636/3636484.png",
-        description:"Bloc-notes avancé multitab.",
-        windowHtml:`<div class="window-header">Notepad Pro <span class="window-close" onclick="closeWindow('win-notepadpro')">&times;</span></div>
-        <div class="window-content">
-          <div id="np-tabs"></div>
-          <button class="install-btn" onclick="addNpTab()">Nouvel onglet</button>
-          <div id="np-pad"></div>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:`
-          let npTabs=[{title:"Note 1",text:""}],npCurrent=0;
-          function renderTabs(){
-            let t=document.getElementById('np-tabs');
-            t.innerHTML="";
-            npTabs.forEach((tab,i)=>{
-              let b=document.createElement('button');
-              b.textContent=tab.title;
-              b.onclick=()=>{npCurrent=i;renderTabs();renderPad();}
-              if(i===npCurrent) b.style.background="#2590fa",b.style.color="#fff";
-              t.appendChild(b);
-            });
-          }
-          function renderPad(){
-            let d=document.getElementById('np-pad');
-            d.innerHTML='<textarea style="width:99%;height:130px;" id="np-text"></textarea>';
-            document.getElementById('np-text').value=npTabs[npCurrent].text;
-            document.getElementById('np-text').oninput=function(){npTabs[npCurrent].text=this.value;}
-          }
-          window.addNpTab=function(){npTabs.push({title:"Note "+(npTabs.length+1),text:""});npCurrent=npTabs.length-1;renderTabs();renderPad();}
-          renderTabs();renderPad();
-        `
-      },
-      {
-        id:"weather",
-        name:"Météo",
-        icon:"https://cdn-icons-png.flaticon.com/512/869/869869.png",
-        description:"Affiche la météo fictive.",
-        windowHtml:`<div class="window-header">Météo <span class="window-close" onclick="closeWindow('win-weather')">&times;</span></div>
-        <div class="window-content">
-          <b>Météo pour Paris</b><br>
-          <span style="font-size:50px;">🌤️</span><br>
-          <span style="font-size:23px;">24°C - Ensoleillé</span>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:``
-      },
-      {
-        id:"drawpad",
-        name:"DrawPad",
-        icon:"https://cdn-icons-png.flaticon.com/512/149/149062.png",
-        description:"Mini pad de dessin.",
-        windowHtml:`<div class="window-header">DrawPad <span class="window-close" onclick="closeWindow('win-drawpad')">&times;</span></div>
-        <div class="window-content">
-          <canvas id="drawpad-canvas" width="300" height="160" style="background:#fff;border-radius:7px;box-shadow:0 2px 8px #0003;cursor:crosshair;display:block;margin-bottom:8px;"></canvas>
-          <button class="install-btn" onclick="drawpadClear()">Effacer</button>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:`
-          let dp=document.getElementById('drawpad-canvas'),dpctx=dp.getContext('2d'),dpadrawing=false;
-          dp.onmousedown=e=>{dpadrawing=true;dpctx.beginPath();dpctx.moveTo(e.offsetX,e.offsetY);}
-          dp.onmouseup=e=>{dpadrawing=false;}
-          dp.onmouseleave=e=>{dpadrawing=false;}
-          dp.onmousemove=e=>{if(dpadrawing){dpctx.lineTo(e.offsetX,e.offsetY);dpctx.strokeStyle="#38b2ac";dpctx.lineWidth=2;dpctx.stroke();}}
-          window.drawpadClear=function(){dpctx.clearRect(0,0,dp.width,dp.height);}
-        `
-      },
-      {
-        id:"clock",
-        name:"Horloge",
-        icon:"https://cdn-icons-png.flaticon.com/512/2922/2922506.png",
-        description:"Affiche l'heure actuelle.",
-        windowHtml:`<div class="window-header">Horloge <span class="window-close" onclick="closeWindow('win-clock')">&times;</span></div>
-        <div class="window-content">
-          <div id="clock-hr" style="font-size:41px;"></div>
-        </div>
-        <div class="resize-handle"></div>`,
-        js:`
-          function updateClockH(){document.getElementById('clock-hr').textContent=
-            new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
-          setInterval(updateClockH,1000);updateClockH();
-        `
-      }
-    ];
+  const canvas = document.getElementById('screen');
+  const stage = document.getElementById('stage');
+  const overlay = document.getElementById('overlay');
+  const startBox = document.getElementById('startBox');
+  const gameOverBox = document.getElementById('gameOverBox');
+  const gameOverScore = document.getElementById('gameOverScore');
+  const scoreEl = document.getElementById('score');
+  const fsBtn = document.getElementById('fsBtn');
+  const muteBtn = document.getElementById('muteBtn');
+  const startBtn = document.getElementById('startBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const retryBtn = document.getElementById('retryBtn');
+  const goStartBtn = document.getElementById('goStartBtn');
+  const ctx = canvas.getContext('2d');
 
-    // Liste dynamique des apps installées sur le bureau (id == win-id)
-    let dynamicApps = [];
+  let devicePixel = Math.max(1, window.devicePixelRatio || 1);
+  let cssWidth = 0, cssHeight = 0;
 
-    function renderDesktopIcons() {
-      let desktop = document.getElementById('desktop-icons');
-      desktop.innerHTML = '';
-      let y = 54, x = 34, col = 0;
-      [...desktopApps,...dynamicApps].forEach((app,i) => {
-        let icon = document.createElement('div');
-        icon.className = 'desktop-icon';
-        icon.style.top = (y+(col*94))+'px';
-        icon.style.left = (x)+'px';
-        icon.innerHTML = `<img src="${app.icon}"><span>${app.name}</span>`;
-        icon.onclick = ()=>openWindow(app.win||('win-'+app.id));
-        desktop.appendChild(icon);
-        if((i+1)%5===0){ x+=110; col=0;} else {col++;}
-      });
-    }
-    function openWindow(id) {
-      let el = document.getElementById(id);
-      if(el) { el.style.display = 'flex'; el.style.zIndex = 200; }
-      document.getElementById('start-menu').style.display = 'none';
-      addTaskbarApp(id);
-    }
-    function closeWindow(id) {
-      let el = document.getElementById(id);
-      if(el) el.style.display = 'none';
-      removeTaskbarApp(id);
-    }
-    function toggleStartMenu() {
-      let menu = document.getElementById('start-menu');
-      menu.style.display = (menu.style.display === 'none') ? 'block' : 'none';
-    }
-    function updateClock() {
-      const now = new Date();
-      document.getElementById('clock').textContent =
-        now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-    }
-    setInterval(updateClock, 1000); updateClock();
+  let state = 'start'; // start, playing, over
+  let pipes = [];
+  let pipeTimer = 0;
+  let lastTs = 0;
+  let score = 0;
+  let highScore = Number(localStorage.getItem('flapi-high') || 0);
+  let muted = false;
 
-    // Store rendering
-    function renderStoreList() {
-      let el = document.getElementById('store-apps');
-      el.innerHTML = '';
-      storeApps.forEach(app => {
-        let isInstalled = !!dynamicApps.find(a=>a.id===app.id);
-        el.innerHTML += `<div class="app-store-item">
-          <img src="${app.icon}">
-          <div class="desc">
-            <b>${app.name}</b><br>
-            <small>${app.description}</small>
-          </div>
-          <button class="install-btn" onclick="installApp('${app.id}')" ${isInstalled ? 'disabled' : ''}>${isInstalled ? "Installée" : "Installer"}</button>
-          <button class="uninstall-btn" onclick="uninstallApp('${app.id}')" ${!isInstalled ? 'disabled' : ''}>Désinstaller</button>
-        </div>`;
-      });
+  // bird
+  const bird = { x: 72, y: BASE_H/2, r: 12, vy: 0, rotation: 0, wing: 0 };
+  // when dead we freeze rotation so the bird doesn't snap upright
+  let freezeRotation = 0;
+
+  const GRAVITY = 1100;
+  const FLAP_V = -290;
+  const PIPE_SPEED = -120;
+
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  const audioCtx = AudioCtx ? new AudioCtx() : null;
+  function beep(freq, dur=0.06, type='sine', vol=0.12){
+    if(muted || !audioCtx) return;
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur + 0.02);
+  }
+
+  function resizeCanvas(){
+    const isFull = document.fullscreenElement === document.body || document.fullscreenElement === document.documentElement || stage.classList.contains('fullscreen');
+    const maxW = isFull ? window.innerWidth - 40 : Math.min(window.innerWidth - 40, 900);
+    const maxH = isFull ? window.innerHeight - 40 : window.innerHeight - 140;
+    const ratio = BASE_W / BASE_H;
+    let w = maxW, h = Math.round(w / ratio);
+    if(h > maxH){ h = maxH; w = Math.round(h * ratio); }
+    cssWidth = w; cssHeight = h;
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    canvas.width = Math.round(BASE_W * devicePixel);
+    canvas.height = Math.round(BASE_H * devicePixel);
+    ctx.setTransform(devicePixel,0,0,devicePixel,0,0);
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  function spawnPipe(){
+    const top = Math.floor(rand(MIN_PIPE_TOP, MAX_PIPE_TOP));
+    pipes.push({ x: BASE_W + PIPE_W, top: top, bottom: top + PIPE_GAP, passed: false });
+  }
+  function rand(a,b){ return a + Math.random()*(b-a); }
+
+  function showStartOverlay(){
+    overlay.style.display = 'flex';
+    startBox.style.display = 'block';
+    gameOverBox.style.display = 'none';
+  }
+  function showGameOverOverlay(){
+    overlay.style.display = 'flex';
+    startBox.style.display = 'none';
+    gameOverBox.style.display = 'block';
+    gameOverScore.textContent = `Score: ${score} — Meilleur: ${highScore}`;
+  }
+  function hideOverlay(){
+    overlay.style.display = 'none';
+    startBox.style.display = 'none';
+    gameOverBox.style.display = 'none';
+  }
+
+  function resetGame(){
+    pipes = []; pipeTimer = 0; score = 0;
+    bird.x = 72; bird.y = BASE_H/2; bird.vy = 0; bird.rotation = 0; bird.wing = 0;
+    freezeRotation = 0;
+    state = 'start';
+    scoreEl.textContent = String(score);
+    showStartOverlay();
+  }
+
+  function doFlap(){
+    if(state === 'start'){ state = 'playing'; hideOverlay(); }
+    if(state === 'playing'){
+      bird.vy = FLAP_V;
+      beep(880,0.06,'sine',0.09);
+    } else if(state === 'over'){
+      // immediate retry
+      resetGame();
     }
-    function installApp(appId) {
-      let app = storeApps.find(a=>a.id===appId);
-      if(app && !dynamicApps.find(a=>a.id===appId)) {
-        dynamicApps.push({id:app.id,name:app.name,icon:app.icon,win:'win-'+app.id});
-        if(document.getElementById('win-'+app.id)) return;
-        let win = document.createElement('div');
-        win.className = 'window';
-        win.id = 'win-'+app.id;
-        win.innerHTML = app.windowHtml;
-        document.getElementById('dynamic-windows').appendChild(win);
-        makeResizable(win);
-        setTimeout(()=>{try{eval(app.js);}catch(e){}},100);
-        renderDesktopIcons();
-        renderStoreList();
-      }
-    }
-    function uninstallApp(appId){
-      let i = dynamicApps.findIndex(a=>a.id===appId);
-      if(i>-1){
-        dynamicApps.splice(i,1);
-        let win = document.getElementById('win-'+appId);
-        if(win) win.parentNode.removeChild(win);
-        renderDesktopIcons();
-        renderStoreList();
-      }
+  }
+
+  function circleRectCollision(cx,cy,r, rx,ry,rw,rh){
+    const closestX = clamp(cx, rx, rx + rw);
+    const closestY = clamp(cy, ry, ry + rh);
+    const dx = cx - closestX, dy = cy - closestY;
+    return (dx*dx + dy*dy) < (r*r);
+  }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+  function draw(){
+    const g = ctx.createLinearGradient(0,0,0,BASE_H);
+    g.addColorStop(0, '#70c5ce'); g.addColorStop(1, '#9edeff');
+    ctx.fillStyle = g; ctx.fillRect(0,0,BASE_W,BASE_H);
+
+    drawHills();
+
+    for(const p of pipes){
+      drawPipe(p.x, 0, PIPE_W, p.top);
+      drawPipe(p.x, p.bottom, PIPE_W, BASE_H - p.bottom - GROUND_H);
     }
 
-    // Web navigateur
-    function openWebUrl() {
-      let url = document.getElementById('web-url').value.trim();
-      if(!/^https?:\/\//.test(url)) url = 'https://' + url;
-      document.getElementById('web-frame').src = url;
-      return false;
+    drawGround();
+    drawBird(bird.x, bird.y, bird.r, bird.rotation);
+    drawForegroundDecor();
+
+    if(state === 'playing' || state === 'over'){
+      ctx.font = 'bold 36px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillText(String(score), BASE_W/2 + 2, 82 + 2);
+      ctx.fillStyle = '#fff'; ctx.fillText(String(score), BASE_W/2, 80);
     }
-    // Paint (stylo multi-couleur !)
-    (function(){
-      let p=document.getElementById('paint-canvas'),d=p.getContext('2d'),drawing=false,pen="#2590fa";
-      const pens = Array.from(document.querySelectorAll('.paint-pen'));
-      pens.forEach(e=>{
-        e.onclick=function(){
-          pens.forEach(penEl=>penEl.classList.remove('selected'));
-          e.classList.add('selected');
-          pen = e.getAttribute('data-color');
-        };
-      });
-      p.onmousedown=e=>{drawing=true;d.beginPath();d.moveTo(e.offsetX,e.offsetY);}
-      p.onmouseup=e=>{drawing=false;}
-      p.onmouseleave=e=>{drawing=false;}
-      p.onmousemove=e=>{
-        if(drawing){
-          d.lineTo(e.offsetX,e.offsetY);
-          d.strokeStyle=pen;
-          d.lineWidth=3;
-          d.lineCap="round";
-          d.stroke();
+
+    // NOTE: removed canvas-drawn Game Over rectangle to avoid overlap with DOM overlay
+  }
+
+  function drawHills(){
+    ctx.fillStyle = '#4fb3a6';
+    ctx.beginPath();
+    ctx.ellipse(40, 150, 120, 60, 0, 0, Math.PI*2);
+    ctx.ellipse(220, 140, 140, 72, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = '#66c7b7';
+    ctx.beginPath();
+    ctx.ellipse(110, 170, 90, 44, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  function drawPipe(x,y,w,h){
+    if(h <= 0) return;
+    ctx.fillStyle = '#2db23b';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = '#248f31';
+    ctx.fillRect(x, y, 6, h);
+    ctx.fillStyle = '#248f31';
+    ctx.fillRect(x-4, y-8, w+8, 8);
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.strokeRect(x, y, w, h);
+  }
+
+  function drawGround(){
+    const gy = BASE_H - GROUND_H;
+    ctx.fillStyle = '#d99a3a'; ctx.fillRect(0, gy, BASE_W, GROUND_H);
+    ctx.fillStyle = '#c37a2a';
+    for(let i=0;i<BASE_W;i+=20){
+      ctx.fillRect(i, gy+6, 10, 8);
+    }
+    const sg = ctx.createLinearGradient(0, gy, 0, gy+30);
+    sg.addColorStop(0, 'rgba(0,0,0,0.12)'); sg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sg; ctx.fillRect(0, gy, BASE_W, 18);
+  }
+
+  function drawForegroundDecor(){
+    ctx.fillStyle = '#2f8a36';
+    for(let i=10;i<BASE_W;i+=60){
+      ctx.beginPath();
+      ctx.moveTo(i, BASE_H - GROUND_H + 8);
+      ctx.quadraticCurveTo(i+6, BASE_H - GROUND_H + 2, i+10, BASE_H - GROUND_H + 10);
+      ctx.fill();
+    }
+  }
+
+  function drawBird(x,y,r,rot){
+    ctx.save(); ctx.translate(x,y); ctx.rotate(rot);
+    ctx.fillStyle = '#ffd54a';
+    ctx.beginPath(); ctx.ellipse(0,0,r*1.25,r,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ffcf5a';
+    const wingY = -2 + Math.sin(bird.wing) * 4;
+    ctx.beginPath(); ctx.ellipse(-2, wingY, r*0.7, r*0.35, Math.PI/6, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#ff8b3d';
+    ctx.beginPath(); ctx.moveTo(r*1, -3); ctx.lineTo(r*1.9, 0); ctx.lineTo(r*1, 6); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(-2, -4, r*0.18, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.12)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.restore();
+  }
+
+  function update(dt){
+    if(state === 'playing'){
+      bird.vy += GRAVITY * dt;
+      bird.y += bird.vy * dt;
+      bird.rotation = Math.max(-0.8, Math.min(1.2, bird.vy / 600));
+      bird.wing += dt * 18;
+
+      for(const p of pipes){
+        p.x += PIPE_SPEED * dt;
+        if(!p.passed && p.x + PIPE_W < bird.x){
+          p.passed = true; score++; updateScore(); beep(1200,0.06,'square',0.08);
+          if(score > highScore){ highScore = score; localStorage.setItem('flapi-high', highScore); }
         }
       }
-      window.paintClear=function(){d.clearRect(0,0,p.width,p.height);}
-    })();
-    // Montage vidéo (démo)
-    (function(){
-      let timeline = [], current = -1;
-      const $timeline = document.getElementById('montage-timeline');
-      const $player = document.getElementById('montage-player');
-      document.getElementById('montage-load').onclick = function(){
-        const url = document.getElementById('montage-url').value.trim();
-        if(url){ timeline.push(url); renderTimeline(); }
-      };
-      function renderTimeline(){
-        $timeline.innerHTML = "";
-        timeline.forEach((url,i)=>{
-          let btn = document.createElement('button');
-          btn.className = "install-btn";
-          btn.textContent = "Vidéo "+(i+1);
-          btn.onclick = function(){
-            $player.src = url;
-            $player.style.display = "";
-            $player.play();
-            current = i;
-          };
-          let del = document.createElement('button');
-          del.className = "uninstall-btn";
-          del.textContent = "✖";
-          del.onclick = function(){ timeline.splice(i,1); renderTimeline(); $player.style.display="none"; }
-          $timeline.appendChild(btn);$timeline.appendChild(del);
-        });
+      pipes = pipes.filter(p => p.x + PIPE_W > -20);
+
+      pipeTimer += dt * 1000;
+      if(pipeTimer >= PIPE_INTERVAL){
+        pipeTimer = 0; spawnPipe();
       }
-    })();
-    // PPT
-    (function(){
-      let pptSlides=[{title:"Bienvenue",txt:"Votre présentation ici",img:""}],pptCurrent=0;
-      function pptRenderList(){
-        let l=document.getElementById('ppt-slide-list');
-        l.innerHTML="";
-        pptSlides.forEach((s,i)=>{
-          let d=document.createElement('div');
-          d.className='ppt-slide-thumb'+(pptCurrent===i?' selected':'');
-          d.innerHTML='<span class="ppt-num">'+(i+1)+'</span>'+(s.title||"")+'<br>'+((s.img)?'<img src="'+s.img+'" style="max-width:30px;max-height:22px;">':"");
-          d.onclick=()=>{pptCurrent=i;pptRenderSlide();pptRenderList();};
-          l.appendChild(d);
-        });
-      }
-      function pptRenderSlide(){
-        let s=pptSlides[pptCurrent];
-        document.getElementById('ppt-title').value=s.title;
-        document.getElementById('ppt-txt').value=s.txt;
-        document.getElementById('ppt-img-url').value=s.img||"";
-        let imgEl=document.getElementById('ppt-img');
-        if(s.img){imgEl.src=s.img;imgEl.style.display="block";}else{imgEl.style.display="none";}
-      }
-      function pptSync(){
-        pptSlides[pptCurrent].title=document.getElementById('ppt-title').value;
-        pptSlides[pptCurrent].txt=document.getElementById('ppt-txt').value;
-        pptSlides[pptCurrent].img=document.getElementById('ppt-img-url').value;
-        pptRenderList();pptRenderSlide();
-      }
-      document.getElementById('ppt-title').oninput=pptSync;
-      document.getElementById('ppt-txt').oninput=pptSync;
-      document.getElementById('ppt-img-url').oninput=pptSync;
-      document.getElementById('ppt-add-slide').onclick=()=>{pptSlides.push({title:"",txt:"",img:""});pptCurrent=pptSlides.length-1;pptRenderList();pptRenderSlide();};
-      document.getElementById('ppt-del-slide').onclick=()=>{if(pptSlides.length>1){pptSlides.splice(pptCurrent,1);pptCurrent=0;pptRenderList();pptRenderSlide();}};
-      pptRenderList();pptRenderSlide();
-    })();
-    // Tic Tac Toe
-    (function(){
-      let tttB = Array(9).fill(""),tttTurn="X";
-      function tttDraw(){
-        let b=document.getElementById('ttt-board');
-        b.innerHTML="";
-        tttB.forEach((v,i)=>{let c=document.createElement('div');c.className='ttt-cell';c.textContent=v;c.onclick=()=>tttPlay(i);b.appendChild(c);});
-        document.getElementById('ttt-info').textContent="Tour: "+tttTurn;
-      }
-      function tttPlay(i){
-        if(tttB[i]==""){
-          tttB[i]=tttTurn;
-          if(tttWin(tttTurn)){document.getElementById('ttt-info').textContent=tttTurn+" gagne!";return;}
-          tttTurn=tttTurn==="X"?"O":"X";tttDraw();
+
+      for(const p of pipes){
+        if(circleRectCollision(bird.x, bird.y, bird.r, p.x, 0, PIPE_W, p.top) ||
+           circleRectCollision(bird.x, bird.y, bird.r, p.x, p.bottom, PIPE_W, BASE_H - p.bottom - GROUND_H)){
+          // freeze rotation at the instant of death and show overlay
+          freezeRotation = bird.rotation;
+          state = 'over'; beep(140,0.4,'sawtooth',0.22);
+          showGameOverOverlay();
         }
       }
-      function tttWin(t){return[0,1,2,3,4,5,6,7].some(l=>[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]][l].every(i=>tttB[i]==t));}
-      tttDraw();
-    })();
-    // Musique
-    document.getElementById('music-load').onclick = function() {
-      let url = document.getElementById('music-url').value.trim();
-      if(url) {
-        let player = document.getElementById('music-player');
-        player.src = url;
-        player.play();
-      }
-    };
-    // Calendrier
-    (function(){
-      function renderCalendar(){
-        let d = new Date();
-        let y = d.getFullYear(), m = d.getMonth();
-        let first = new Date(y, m, 1), last = new Date(y, m+1, 0);
-        let days = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"];
-        let html = '<table style="width:100%;text-align:center;"><tr>'+days.map(j=>'<th>'+j+'</th>').join('')+'</tr><tr>';
-        let wd = (first.getDay()+6)%7;
-        html += "<td colspan='"+wd+"'></td>";
-        for(let i=1; i<=last.getDate(); ++i){
-          let dt = new Date(y,m,i);
-          let sel = (dt.toDateString()===(new Date()).toDateString())?'style="background:#2590fa;color:#fff;border-radius:7px;"':'';
-          html += `<td ${sel}>${i}</td>`;
-          if(((wd+i)%7)===0) html+="</tr><tr>";
-        }
-        html+="</tr></table>";
-        document.getElementById('calendar-view').innerHTML = html;
-      }
-      renderCalendar();
-    })();
 
-    // Taskbar apps
-    let openAppsTaskbar = [];
-    function addTaskbarApp(winid) {
-      let taskbar = document.getElementById('taskbar-apps');
-      let already = openAppsTaskbar.find(x=>x.id===winid);
-      if(already) return;
-      // Find in desktop or dynamic
-      let found = [...desktopApps,...dynamicApps, ...storeApps].find(x=>(x.win||'win-'+x.id)===winid);
-      if(!found) return;
-      let btn = document.createElement('div');
-      btn.className = 'taskbar-app';
-      btn.id = 'tb-'+winid;
-      btn.innerHTML = `<img src="${found.icon}" /> ${found.name}`;
-      btn.onclick = ()=>openWindow(winid);
-      taskbar.appendChild(btn);
-      openAppsTaskbar.push({id:winid,el:btn});
+      const groundY = BASE_H - GROUND_H;
+      if(bird.y + bird.r >= groundY){
+        bird.y = groundY - bird.r;
+        // preserve rotation (don't snap upright) and freeze
+        freezeRotation = bird.rotation;
+        state = 'over'; beep(90,0.6,'sine',0.32); showGameOverOverlay();
+      }
+
+      if(bird.y - bird.r <= 0){ bird.y = bird.r; bird.vy = 0; }
+    } else if(state === 'start'){
+      // only the start screen gets the idle bob animation
+      bird.wing += dt * 6;
+      bird.rotation = Math.sin(bird.wing) * 0.06;
+      bird.y = BASE_H/2 + Math.sin(bird.wing*0.6) * 6;
+    } else if(state === 'over'){
+      // freeze bird in place: keep the rotation we captured on death and don't change y
+      bird.rotation = freezeRotation;
+      bird.vy = 0;
+      // do not change bird.y or bird.wing so the bird stays where it died
     }
-    function removeTaskbarApp(winid) {
-      let idx = openAppsTaskbar.findIndex(x=>x.id===winid);
-      if(idx>-1) {
-        let el = openAppsTaskbar[idx].el;
-        if(el && el.parentNode) el.parentNode.removeChild(el);
-        openAppsTaskbar.splice(idx,1);
-      }
+  }
+
+  function updateScore(){ scoreEl.textContent = String(score); }
+
+  let lastFrame = 0;
+  function loop(ts){
+    if(!lastTs) lastTs = ts;
+    const dt = Math.min(0.04, (ts - lastTs)/1000);
+    lastTs = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  function attachInputs(){
+    function startUserAudio(){
+      if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
     }
+    canvas.addEventListener('pointerdown', (e) => { startUserAudio(); doFlap(); });
+    window.addEventListener('keydown', (e) => {
+      if(e.code === 'Space'){ e.preventDefault(); startUserAudio(); doFlap(); }
+      if(e.key === 'r' || e.key === 'R'){ resetGame(); }
+      if(e.key === 'f' || e.key === 'F'){ toggleFullscreen(); }
+      if(e.key === 'm' || e.key === 'M'){ toggleMute(); }
+    });
+    canvas.addEventListener('dblclick', toggleFullscreen);
+    startBtn.addEventListener('click', () => { doFlap(); });
+    resetBtn.addEventListener('click', resetGame);
+    fsBtn.addEventListener('click', toggleFullscreen);
+    muteBtn.addEventListener('click', toggleMute);
+    retryBtn.addEventListener('click', () => { resetGame(); doFlap(); });
+    goStartBtn.addEventListener('click', () => { resetGame(); });
+    window.addEventListener('touchstart', () => { if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume(); }, {passive:true});
+  }
+  attachInputs();
 
-    // Fenêtres redimensionnables
-    function makeResizable(win) {
-      let handle = win.querySelector('.resize-handle');
-      if(!handle) return;
-      let resizing = false, startX, startY, startW, startH;
-      handle.onmousedown = function(e){
-        e.preventDefault();
-        resizing = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        startW = win.offsetWidth;
-        startH = win.offsetHeight;
-        document.body.style.userSelect="none";
-      };
-      window.onmousemove = function(e){
-        if(resizing){
-          win.style.width = Math.max(220, startW + (e.clientX - startX))+'px';
-          win.style.height = Math.max(120, startH + (e.clientY - startY))+'px';
-        }
-      };
-      window.onmouseup = function(){resizing=false;document.body.style.userSelect="";}
+  function toggleFullscreen(){
+    const isFS = document.fullscreenElement;
+    if(!isFS){
+      (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen || document.documentElement.msRequestFullscreen)?.call(document.documentElement);
+    } else {
+      (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen)?.call(document);
     }
-    document.querySelectorAll('.window').forEach(makeResizable);
+  }
+  document.addEventListener('fullscreenchange', () => {
+    const isFS = !!document.fullscreenElement;
+    if(isFS){ stage.classList.add('fullscreen'); stage.style.width = '100vw'; stage.style.height = '100vh'; }
+    else { stage.classList.remove('fullscreen'); stage.style.width = ''; stage.style.height = ''; }
+    setTimeout(resizeCanvas, 60);
+  });
 
-    // Store au premier rendu
-    renderStoreList();
-    renderDesktopIcons();
+  function toggleMute(){
+    muted = !muted; muteBtn.textContent = muted ? '🔈' : '🔊';
+  }
+  muteBtn.textContent = muted ? '🔈' : '🔊';
 
-    // Menu démarrer auto-fermeture
-    document.body.addEventListener('click', function(e) {
-      if (!e.target.closest('.start-btn') && !e.target.closest('#start-menu')) {
-        document.getElementById('start-menu').style.display = 'none';
-      }
-    }, true);
-  </script>
+  spawnPipe();
+  updateScore();
+  showStartOverlay();
+
+  window.flapiReset = resetGame;
+  function ensurePixelated(){ canvas.classList.add('pixelated'); }
+  ensurePixelated();
+
+})();
+</script>
 </body>
 </html>
